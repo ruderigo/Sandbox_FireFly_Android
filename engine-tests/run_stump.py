@@ -193,6 +193,21 @@ wait(lambda: w()["room"] == "lounge", 15, "/join: `room` field in the reply move
 api.stump_auth(wkey)
 wait(lambda: w()["auth"] == "ok", 15, "/auth over HTTP -> AUTH-OK, same code path")
 check(w()["auth_detail"] == core.identity.hash.hex(), "same identity on both transports")
+print("-- plugin commands (!roll) and what ⧗ answers")
+wlines = lambda: [l["body"] for l in w()["lines"]]
+for _ in range(4):
+    api.stump_post(wkey, "!roll")
+wait(lambda: any("rolls 4" in b for b in wlines()), 15, "!roll: the plugin answers in the room, from its own nick")
+wait(lambda: any(b.startswith("⧗") for b in wlines()), 15, "a 4th !roll in 10 s: ⧗ shown in the room")
+sess = core.sessions[wkey]
+note = core.store.add_dm(wkey, "alice", True, "♪ 1.0 s", "pending", audio=(16, opus_note))
+sess.voice_sent_at[note] = time.time() - 2           # the note went out, then a command after it
+sess.last_command_at = time.time()
+sess.on_http_replies(["⧗ — slow down: too many commands"], None)
+check(vrow(wkey, "alice", note)["state"] == "pending", "a ⧗ after a later command leaves the voice note alone")
+sess.last_command_at = time.time() - 5                 # now the note is the latest thing we sent
+sess.on_http_replies(["⧗ — slow down: one voice note every 5 seconds"], None)
+check(vrow(wkey, "alice", note)["state"] == "failed", "...and fails it when the note was the last thing sent")
 print("-- hide and show again")
 keys = lambda: [n["key"] for n in json.loads(api.stump_nodes())]
 mesh_lines = len(core.store.lines(key, v()["room"]))

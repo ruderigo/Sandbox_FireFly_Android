@@ -37,10 +37,10 @@ def _attr(obj, name):
     return v
 
 
-def _call(http, method, url, body=None, content_type=None, timeout_ms=8000):
-    headers = {}
+def _call(http, method, url, body=None, content_type=None, timeout_ms=8000, extra=None):
+    headers = dict(extra or {})
     if body is not None:
-        headers = {"Content-Type": content_type, "Content-Length": str(len(body))}
+        headers.update({"Content-Type": content_type, "Content-Length": str(len(body))})
     r = http.request(method, url, json.dumps(headers), body, timeout_ms)
     raw = _attr(r, "body")
     return int(_attr(r, "status")), bytes(raw) if raw is not None else b""
@@ -100,29 +100,50 @@ def board(http, base, now=None):
 
 
 def board_post(http, base, title, body=""):
-    """Post, then read the board back: /post answers 303 whatever happened, so the
-    refetch is the only proof. -> {"ok": bool, "reason"?, "board": board()}"""
+    """Post to the billboard. -> {"ok": bool, "reason"?, "id"?, "message"?, "board": board()}
+
+    A current node answers as data when asked (Accept: application/json):
+    201 {"ok": true, "id"}, 400 {"error": "title_required"}, 507 {"error":
+    "storage"}. An older one answers 303 whatever happened; then the board is
+    read back, and a post with this title that wasn't there before is the proof."""
     title, body = clean_title(title), clean_body(body)
     if not title:
         return {"ok": False, "reason": "empty", "board": board(http, base)}
     before = board(http, base)
     if before["state"] == "off":
         return {"ok": False, "reason": "off", "board": before}
-    seen = {(p["id"], p["title"]) for p in before.get("posts", [])}
-    # Percent-encoded UTF-8 with %20 for spaces: every form decoder reads it.
     form = urllib.parse.urlencode({"title": title, "body": body}, quote_via=urllib.parse.quote).encode("ascii")
-    try:
-        status, _ = _call(http, "POST", base + "/post", form,
-                          "application/x-www-form-urlencoded; charset=utf-8", timeout_ms=10000)
-    except Exception as e:
-        return {"ok": False, "reason": "unreachable", "detail": str(e), "board": before}
+    status, data = _json_answer(lambda: _call(
+        http, "POST", base + "/post", form, "application/x-www-form-urlencoded; charset=utf-8",
+        timeout_ms=10000, extra={"Accept": "application/json"}))
     if status == 404:
         return {"ok": False, "reason": "off", "board": {"state": "off"}}
-    if status not in (200, 302, 303):
-        return {"ok": False, "reason": "unreachable" if status < 0 else "error", "status": status, "board": before}
+    if status < 0:
+        return {"ok": False, "reason": "unreachable", "message": data.get("message"), "board": before}
     after = board(http, base)
+    if "ok" in data:                                    # a node that answers as data
+        if data["ok"]:
+            return {"ok": True, "id": data.get("id"), "board": after}
+        reason = {"title_required": "empty", "storage": "storage"}.get(data.get("error"), "error")
+        return {"ok": False, "reason": reason, "message": data.get("message"), "board": after}
+    if status not in (200, 201, 302, 303):
+        return {"ok": False, "reason": "error", "status": status, "board": after}
+    seen = {(p["id"], p["title"]) for p in before.get("posts", [])}
     fresh = [p for p in after.get("posts", []) if (p["id"], p["title"]) not in seen and p["title"] == title]
     return {"ok": bool(fresh), "reason": None if fresh else "dropped", "board": after}
+
+
+def _json_answer(send):
+    """(status, dict) from a write that may answer as JSON; the dict is {} when it didn't."""
+    try:
+        status, raw = send()
+    except Exception as e:
+        return -1, {"message": str(e)}
+    try:
+        data = json.loads(raw.decode("utf-8")) if raw else {}
+    except Exception:
+        data = {}
+    return status, data if isinstance(data, dict) else {}
 
 
 # ------------------------------------------------------------------ files
@@ -149,3 +170,63 @@ def download_url(base, name):
 
 def upload_cost(name, credits=True):
     return CLASS_WEIGHT[file_class(name)] if credits else 0
+
+
+# ------------------------------------------------------------------ plugins
+SLASH_ONLY_PLUGINS = ("stumpid", "fservbot")       # /auth, /admin, /fs…: some take a password
+
+
+def plugins(http, base):
+    """GET /plugins.json: the node's plugin commands, as `!word` suggestions.
+    -> {"state", "trigger", "commands": [{"word", "plugin"}]}
+
+    stumpid and fservbot are listed by the node too, but their commands are slash
+    only (some carry a password), and FireFly already handles /auth itself."""
+    data = _get_json(http, base + "/plugins.json")
+    if data["state"] != "ok":
+        return data
+    trigger = str(data.get("trigger") or "!")[:2]
+    out, seen = [], set()
+    for p in data.get("plugins") or []:
+        if not isinstance(p, dict) or p.get("name") in SLASH_ONLY_PLUGINS:
+            continue
+        for c in p.get("commands") or []:
+            word = str(c).strip().lstrip("/!")
+            if word and word not in seen and len(word) <= 20 and " " not in word:
+                seen.add(word)
+                out.append({"word": trigger + word, "plugin": str(p.get("name") or "")})
+    return {"state": "ok", "trigger": trigger, "commands": out}
+
+
+# ------------------------------------------------------------------ apps on the node
+def _version_key(v):
+    """The node's own rule (fserv._version_key): dot-separated, numbers compared as
+    numbers, anything else (0-beta) below any number. 0.2.11 > 0.2.9;
+    0.5.0-beta.1 < 0.5.0."""
+    out = []
+    for part in str(v).split("."):
+        out.append(int(part) if part.isdigit() else -1)
+    return out
+
+
+def newer(candidate, mine):
+    a, b = _version_key(candidate), _version_key(mine)
+    n = max(len(a), len(b))
+    return a + [0] * (n - len(a)) > b + [0] * (n - len(b))
+
+
+def tools(http, base, my_version):
+    """GET /tools.json: the FireFly apps the node carries. -> {"state", "update": {...} | None}
+    `update` is the node's Android app when it's newer than ours."""
+    data = _get_json(http, base + "/tools.json")
+    if data["state"] != "ok":
+        return data
+    update = None
+    for a in data.get("apps") or []:
+        if isinstance(a, dict) and a.get("app") == "android" and a.get("version") and a.get("url"):
+            if newer(str(a["version"]), my_version):
+                url = str(a["url"])
+                update = {"version": str(a["version"]), "file": str(a.get("file") or ""),
+                          "size": a.get("size") if isinstance(a.get("size"), int) else None,
+                          "url": url if "://" in url else base + "/" + url.lstrip("/")}
+    return {"state": "ok", "update": update}

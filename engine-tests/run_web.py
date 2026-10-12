@@ -51,7 +51,8 @@ check("post with an id has a time and expiry", first["posted"] and 0 < first["ex
 check("post without an id is kept, no time", b["posts"][1]["id"] is None and b["posts"][1]["posted"] is None)
 
 r = stump_web.board_post(http, BASE, "Vélo à vendre\nbon état", "Rouge, 3 vitesses.\nPrix: 40 $ + casque")
-check("post lands, proven by refetch", r["ok"], r)
+check("post lands: the node's 201 answer, with the post's id", r["ok"] and r.get("id")
+      and r["board"]["posts"][0]["id"] == r["id"], r)
 top = r["board"]["posts"][0]
 check("title line break became a space", top["title"] == "Vélo à vendre bon état", top["title"])
 check("body keeps line breaks, + and $ survive", top["body"] == "Rouge, 3 vitesses.\nPrix: 40 $ + casque", repr(top["body"]))
@@ -63,12 +64,26 @@ check("long title/body are cut to 80/600", r["ok"] and len(r["board"]["posts"][0
 r = stump_web.board_post(http, BASE, "   \n ", "")
 check("empty title refused before sending", not r["ok"] and r["reason"] == "empty")
 
-# A post the node drops silently (its own rules) is reported as dropped, not as success.
+# The node's own refusals, as data: 400 title_required, 507 storage.
 orig = web.post
-web.post = lambda form: None
+web.post = lambda form: (False, "title_required")
+r = stump_web.board_post(http, BASE, "the node says no title", "")
+check("400 title_required from the node reads as 'empty'", not r["ok"] and r["reason"] == "empty", r)
+web.post = orig
+os.environ["FAKE_STUMP_POST_FULL"] = "1"
+r = stump_web.board_post(http, BASE, "card full", "")
+check("507 storage: not posted, reason 'storage'", not r["ok"] and r["reason"] == "storage", r)
+del os.environ["FAKE_STUMP_POST_FULL"]
+
+# An older node (Oct 7 stable) answers 303 whatever happened: proven by reading the board back.
+os.environ["FAKE_STUMP_OLD"] = "1"
+r = stump_web.board_post(http, BASE, "old node post", "still works")
+check("old node: post proven by refetch", r["ok"] and r["board"]["posts"][0]["title"] == "old node post", r)
+web.post = lambda form: (False, "title_required")
 r = stump_web.board_post(http, BASE, "this one vanishes", "")
 web.post = orig
-check("silently dropped post is detected", not r["ok"] and r["reason"] == "dropped", r)
+check("old node: a silently dropped post is detected", not r["ok"] and r["reason"] == "dropped", r)
+del os.environ["FAKE_STUMP_OLD"]
 
 # ---------------------------------------------------------------- files
 f = stump_web.files(http, BASE)
@@ -128,15 +143,62 @@ check("UTF-8 filename stored exactly (barkeep rules: quote dropped, colon _)", s
 st, data, _ = raw("GET", stump_web.download_url(BASE, "Fête de lété_ 2026.pdf")[len(BASE):])
 check("and downloads back by its UTF-8 name", st == 200 and data == b"%PDF-1.4 hello")
 
-# What a browser or urllib does with é in a header: one Latin-1 byte. barkeep's
-# line.decode() fails on it and the request ends with no answer at all. The app
-# never sends that; this documents why (and is in the notes for the Stump team).
+# Answers as data (Accept: application/json), what the app asks for.
+J = {"Accept": "application/json"}
+st, body, _ = raw("POST", "/upload", b"abc", {**J, "X-Filename": "notes.txt", "Content-Length": "3"})
+d = json.loads(body)
+check("upload as data: ok, stored name, balance", st == 200 and d["ok"] and d["name"] == "notes.txt"
+      and isinstance(d["balance"], int) and d["slot"] is False, d)
+os.environ["FAKE_STUMP_FULL"] = "1"
+st, body, _ = raw("POST", "/upload", b"abc", {**J, "X-Filename": "a.txt", "Content-Length": "3"})
+del os.environ["FAKE_STUMP_FULL"]
+d = json.loads(body)
+check("full card as data: 507, error 'full'", st == 507 and not d["ok"] and d["error"] == "full", d)
+st, body, _ = raw("POST", "/upload", b"", {**J, "X-Filename": "e.txt", "Content-Length": "0"})
+check("empty as data: 400, error 'empty'", st == 400 and json.loads(body)["error"] == "empty")
+
+# Over HTTPS the app sends the name percent-encoded with X-Filename-Encoding: url.
+st, body, _ = raw("POST", "/upload", b"x", {**J, "X-Filename": "th%C3%A9%20%E6%97%A5%E6%9C%AC.jpg",
+                                             "X-Filename-Encoding": "url", "Content-Length": "1"})
+check("percent-encoded name decoded (thé 日本.jpg)", st == 200 and json.loads(body)["name"] == "thé 日本.jpg", body)
+st, body, _ = raw("POST", "/upload", b"x", {**J, "X-Filename": "100%25.txt", "Content-Length": "1"})
+check("without the encoding header a % stays literal", json.loads(body)["name"] == "100%25.txt", body)
+
+# é as one Latin-1 byte (browsers, urllib): a current node reads it as Latin-1; an
+# older one closed the connection with no answer (what FireFly reported).
+st, body, _ = raw("POST", "/upload", b"abc", {**J, "X-Filename": "été.txt", "Content-Length": "3"})
+check("Latin-1 filename header: now answered and stored as été.txt", st == 200 and json.loads(body)["name"] == "été.txt", body)
+os.environ["FAKE_STUMP_OLD"] = "1"
 try:
     raw("POST", "/upload", b"abc", {"X-Filename": "été.txt", "Content-Length": "3"})
     latin1_answered = True
 except Exception:
     latin1_answered = False
-check("a Latin-1 filename header gets no answer (barkeep behaviour, mirrored)", not latin1_answered)
+check("...an older node: no answer at all (why FireFly sends raw UTF-8)", not latin1_answered)
+st, body = raw_socket_upload("Crème brûlée.txt", b"yum")
+check("...but raw UTF-8 works there too, as plain text", st == 200 and body.decode().startswith("Uploaded."), (st, body))
+del os.environ["FAKE_STUMP_OLD"]
+
+# ---------------------------------------------------------------- plugins and apps
+pl = stump_web.plugins(http, BASE)
+check("plugins: !commands offered, slash-only stumpid/fservbot left out",
+      pl["state"] == "ok" and [c["word"] for c in pl["commands"]] == ["!8ball", "!roll", "!seen"], pl)
+t = stump_web.tools(http, BASE, "0.5.0-beta.1")
+check("tools: the node's newer Android app is offered", t["update"] and t["update"]["version"] == "9.9.9"
+      and t["update"]["url"] == BASE + "/tool?f=FireFly-Android-9.9.9.apk", t)
+os.environ["FAKE_STUMP_APK_VERSION"] = "0.4.0"
+check("tools: an older one isn't", stump_web.tools(http, BASE, "0.5.0-beta.1")["update"] is None)
+os.environ["FAKE_STUMP_APK_VERSION"] = "0.5.0-beta.1"
+check("tools: the same one isn't", stump_web.tools(http, BASE, "0.5.0-beta.1")["update"] is None)
+os.environ["FAKE_STUMP_APK_VERSION"] = "0.5.0"
+check("tools: the final release beats its beta", stump_web.tools(http, BASE, "0.5.0-beta.1")["update"]["version"] == "0.5.0")
+del os.environ["FAKE_STUMP_APK_VERSION"]
+st, data, _ = raw("GET", "/tool?f=FireFly-Android-9.9.9.apk")
+check("the offered APK downloads from its url", st == 200 and data == web.APK)
+os.environ["FAKE_STUMP_OLD"] = "1"
+check("older node: no plugins.json -> off", stump_web.plugins(http, BASE)["state"] == "off")
+check("older node: no tools.json -> off", stump_web.tools(http, BASE, "0.4.0")["state"] == "off")
+del os.environ["FAKE_STUMP_OLD"]
 
 # ---------------------------------------------------------------- features off
 os.environ["FAKE_STUMP_NO_BOARD"] = "1"

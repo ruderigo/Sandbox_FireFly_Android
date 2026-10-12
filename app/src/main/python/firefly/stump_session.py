@@ -255,6 +255,7 @@ class StumpSession:
         self.join_target, self.join_at = None, 0.0
         self.seen_remote = set()            # HTTP message ids already stored (dedupe)
         self.closed = False                 # set by stop(): late results are dropped
+        self.last_command_at = 0.0          # our last /command or !plugin line (⧗ can answer either)
         self._save(name=name or node.get("name") or pipe.address, room=self.room, active=1,
                    last_seen=time.time())
         pipe.start(self)
@@ -290,6 +291,8 @@ class StumpSession:
         if low == "/auth":
             return self.start_auth()
         self._note_join(text)
+        if text.startswith(("/", "!")):
+            self.last_command_at = time.time()
         msg_id = self.pipe.send(text)
         if self.pipe.kind == MESH and not text.startswith("/"):
             # Over LXMF your own room lines are never echoed back: draw it now,
@@ -325,6 +328,7 @@ class StumpSession:
 
     def command(self, line):
         self._note_join(line)
+        self.last_command_at = time.time()
         self.pipe.send(line, control=line.startswith("/auth"))
 
     def send_dm(self, nick, text):
@@ -494,9 +498,12 @@ class StumpSession:
         if k == "unknown_command":
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "slow":
-            voice = [dm for dm in self.store.pending_dms(self.key) if dm.get("audio_mode") is not None]
-            if voice:
-                self.store.update_dm(voice[-1]["id"], state="failed",
+            # ⧗ is the node saying "slow down" to voice notes, and since plugins, to commands
+            # too. It names neither: it answers whichever we sent last.
+            note = self._slowed_voice_note()
+            if note:
+                self.voice_sent_at.pop(note["id"], None)
+                self.store.update_dm(note["id"], state="failed",
                                      reason="too many voice notes too fast; wait a little and send again")
                 return
             return self.store.add_line(self.key, self.room, "reply", p.get("text", ""))
@@ -572,6 +579,18 @@ class StumpSession:
     # notice) leaves pending notes alone. (The "/msg <who>" hint can't apply: FireFly
     # always sends /msg <nick> with its notes.)
     VOICE_REFUSAL_MARKERS = ("Opus", "Codec", "0.6", "0,6")
+
+    def _slowed_voice_note(self):
+        """The pending voice note a ⧗ stopped: our most recent one, if it went out in the
+        last minute and after our last command (otherwise the ⧗ is about the command)."""
+        now = time.time()
+        recent = {i: at for i, at in self.voice_sent_at.items() if now - at <= OPUS_REFUSAL_WINDOW_S}
+        notes = [dm for dm in self.store.pending_dms(self.key)
+                 if dm.get("audio_mode") is not None and dm["id"] in recent]
+        if not notes:
+            return None
+        note = max(notes, key=lambda dm: recent[dm["id"]])
+        return note if recent[note["id"]] > self.last_command_at else None
 
     def _refused_voice(self, text):
         """A voice-note refusal right after a voice DM that's still pending: fail that note."""

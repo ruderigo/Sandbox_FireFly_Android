@@ -76,11 +76,16 @@ class WifiHttp(context: Context) {
      * /upload. [onProgress] gets the bytes sent so far. Returns the node's
      * plain-text answer ("Uploaded. Your balance: 4", or why not).
      *
-     * The node reads X-Filename as UTF-8 and doesn't URL-decode it, but
-     * Android's HttpURLConnection refuses non-ASCII header values. So over
-     * plain HTTP (the node's hotspot, 192.168.4.1) the request is written by
-     * hand on a socket of the Wi-Fi network, the filename as real UTF-8 bytes.
-     * Over HTTPS only an ASCII-safe name can be sent.
+     * Android's HttpURLConnection refuses non-ASCII header values. Every node
+     * reads X-Filename as UTF-8, so over plain HTTP (the node's hotspot,
+     * 192.168.4.1) the request is written by hand on a socket of the Wi-Fi
+     * network with the name as real UTF-8 bytes: that works on old and new
+     * nodes alike. Over HTTPS the name goes percent-encoded with
+     * X-Filename-Encoding: url, which current nodes decode.
+     *
+     * Accept: application/json asks a current node for its answer as data
+     * ({"ok", "error", "name", "balance", "message"}); an older one answers
+     * with its plain sentence, which the caller shows as it is.
      */
     fun upload(url: String, filename: String, slotHash: String?, length: Long, input: InputStream,
                onProgress: (Long) -> Unit): HttpResult {
@@ -88,7 +93,7 @@ class WifiHttp(context: Context) {
         return try {
             val u = URL(url)
             if (u.protocol.equals("http", ignoreCase = true)) rawUpload(u, name, slotHash, length, input, onProgress)
-            else connectionUpload(url, asciiName(name), slotHash, length, input, onProgress)
+            else connectionUpload(url, percentName(name), slotHash, length, input, onProgress)
         } catch (e: Exception) {
             HttpResult(-1, (e.message ?: e.javaClass.simpleName).toByteArray())
         }
@@ -120,6 +125,7 @@ class WifiHttp(context: Context) {
                 append("POST ").append(u.file.ifEmpty { "/upload" }).append(" HTTP/1.1\r\n")
                 append("Host: ").append(u.host).append(if (u.port > 0) ":${u.port}" else "").append("\r\n")
                 append("Content-Type: application/octet-stream\r\n")
+                append("Accept: application/json\r\n")
                 append("X-Filename: ").append(name).append("\r\n")
                 if (slotHash != null) append("X-Hash: ").append(slotHash).append("\r\n")
                 append("Content-Length: ").append(length).append("\r\n")
@@ -180,7 +186,9 @@ class WifiHttp(context: Context) {
             conn.instanceFollowRedirects = false
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/octet-stream")
+            conn.setRequestProperty("Accept", "application/json")
             conn.setRequestProperty("X-Filename", name)
+            conn.setRequestProperty("X-Filename-Encoding", "url")
             if (slotHash != null) conn.setRequestProperty("X-Hash", slotHash)
             conn.setFixedLengthStreamingMode(length)
             conn.outputStream.use { pump(input, it, length, onProgress) }
@@ -233,10 +241,16 @@ class WifiHttp(context: Context) {
     }
 
     companion object {
-        /** For HTTPS only: what an ASCII header can carry. Accents dropped (é -> e), anything else -> _. */
-        fun asciiName(name: String): String =
-            java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFD)
-                .filter { it.code !in 0x300..0x36f }
-                .map { if (it.code in 0x20..0x7e) it else '_' }.joinToString("")
+        /** For HTTPS: the name as percent-encoded UTF-8 (encodeURIComponent), sent with X-Filename-Encoding: url. */
+        fun percentName(name: String): String {
+            val sb = StringBuilder()
+            for (b in name.toByteArray(Charsets.UTF_8)) {
+                val c = b.toInt() and 0xff
+                val plain = (c in 'A'.code..'Z'.code) || (c in 'a'.code..'z'.code) || (c in '0'.code..'9'.code) ||
+                    c.toChar() in "-_.!~*'()"
+                if (plain) sb.append(c.toChar()) else sb.append('%').append("%02X".format(c))
+            }
+            return sb.toString()
+        }
     }
 }

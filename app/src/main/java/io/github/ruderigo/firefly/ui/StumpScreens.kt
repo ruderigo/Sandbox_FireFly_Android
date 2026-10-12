@@ -107,10 +107,15 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
     // not on every chat change. A feature the node doesn't offer has no tab.
     var board by remember(key) { mutableStateOf<JSONObject?>(null) }
     var shelf by remember(key) { mutableStateOf<JSONObject?>(null) }
+    var plugins by remember(key) { mutableStateOf<JSONObject?>(null) }     // its !commands
+    var tools by remember(key) { mutableStateOf<JSONObject?>(null) }       // a newer FireFly on its card
+    val version = myVersion(LocalContext.current)
     LaunchedEffect(key) {
         if (!mesh) {
             board = Engine.obj("stump_board", key)
             shelf = Engine.obj("stump_files", key)
+            plugins = Engine.obj("stump_plugins", key)
+            tools = Engine.obj("stump_tools", key, version)
         }
     }
     val auth = view.optString("auth", "none")
@@ -135,6 +140,7 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
                 stringResource(R.string.stump_hide) to { Engine.fire("stump_hide", key); back() },
                 stringResource(R.string.stump_remove) to { menuRemove = true }))
         }
+        if (!mesh) UpdateBanner(key, tools)
         view.optJSONObject("propagation")?.takeIf { it.optBoolean("enabled", false) }?.let { pn ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.node_keeps_messages), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
@@ -167,13 +173,14 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
             "dm" -> PrivatePane(key, view, threads, mesh, go)
             "board" -> BoardPane(key, board) { board = it }
             "files" -> FilesPane(key, shelf) { shelf = it }
-            else -> RoomPane(key, view, mesh)
+            else -> RoomPane(key, view, mesh, plugins)
         }
     }
 }
 
 @Composable
-private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean) {
+private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, plugins: JSONObject? = null) {
+    val draft = remember(key) { mutableStateOf("") }
     val rooms = view.optJSONArray("rooms")?.objects() ?: emptyList()
     val here = view.optString("room")
     Row(Modifier.fillMaxWidth().background(Amber.Sidebar).horizontalScroll(rememberScrollState()).padding(8.dp),
@@ -202,7 +209,10 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean) {
         if (lines.isEmpty()) item { Empty(stringResource(if (mesh) R.string.room_empty_mesh else R.string.room_empty)) }
         items(lines, key = { it.optLong("id") }) { RoomLine(it) }
     }
-    Composer(stringResource(R.string.room_hint, here), counter = { if (mesh) PacketCounter(it) }) { Engine.fire("stump_post", key, it) }
+    PluginChips(plugins) { word -> if (!draft.value.startsWith(word.trim())) draft.value = word }
+    Composer(stringResource(R.string.room_hint, here), counter = { if (mesh) PacketCounter(it) }, draft = draft) {
+        Engine.fire("stump_post", key, it)
+    }
 }
 
 /** One RRC line, coloured by meaning like the node's own web chat. */

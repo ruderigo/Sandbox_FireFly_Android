@@ -8,9 +8,39 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.4.0: a Stump's billboard and file shelf, and a release build.** Phase 1 complete. Built and field-tested: BLE and USB
+Status: **0.5.0-beta.1: beta, following the Stump beta** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
+
+### 0.5.0-beta.1: following Stump 1.0.0-beta.1
+Checked against the Stump beta's CLIENT_QUICKSTART and `barkeep.py`. Every
+change also works with an older node, and the tests run both.
+- **Billboard posts answered as data.** FireFly asks for JSON
+  (`Accept: application/json`): `201` with the post's id, `400
+  title_required`, or `507 storage` ("the node couldn't save the post"). An
+  older node still answers 303 whatever happened, and FireFly still proves
+  the post by reading the board back.
+- **Uploads answered as data**: the stored (sanitized) name, your credit
+  balance, slot deliveries, and an error token (`no_card`, `full`,
+  `interrupted`…) shown in the app's language instead of the node's sentence.
+- **Filenames:** on the hotspot the name still goes as raw UTF-8, which
+  every node reads. Over HTTPS it now goes percent-encoded with
+  `X-Filename-Encoding: url` (accents were dropped before).
+- **Plugins:** a node's plugin commands (`/plugins.json`) show as `!roll`,
+  `!8ball`… chips above the room box; a tap puts the word in the box.
+  stumpid and fservbot are left out, since their commands are slash only.
+- **`⧗` now means "slow down" for plugin commands too.** It names neither,
+  so it now fails a pending voice note only if the note was the last thing
+  sent, within the last minute. After a burst of `!roll` it shows in the
+  room instead of failing a note you sent earlier.
+- **Update from a Stump:** when a node's `/tools.json` carries a newer
+  FireFly for Android, the node screen offers it. **Get it** saves the APK
+  where you choose, and **Install** hands it to Android's installer (Android
+  asks once to let FireFly install apps). It installs over yours only if it's
+  signed with the same key. Versions compare as the node compares them, so
+  `0.5.0` beats `0.5.0-beta.1`.
+- Tags with a suffix (`v0.5.0-beta.1`) publish as GitHub pre-releases.
 
 ### 0.4.0: Board and Files, over a Stump's Wi-Fi
 - **Board tab** on a Stump joined over Wi-Fi: the node's billboard from
@@ -354,7 +384,7 @@ Run from the repository root with `pip install rns==1.5.5 lxmf==1.2.0`:
 | `python3 engine-tests/run_stamps.py` | FireFly's stamp search through LXMF's own Android entry point: valid propagation and delivery stamps at costs 8-16 by LXMF's validator, timing, and cancellation the way LXMF cancels. |
 | `python3 engine-tests/run_propagation.py` | A real upstream LXMF propagation node on a Stump's identity (stamp cost 16, 2 KB limit). Found without its announce; stamps with multiprocessing unavailable; an offline friend and a never-online contact collect by sync; no-path messages go to the node at once; over-limit refused; multi-round sync with no duplicates; Stump chat and "off" never use the node; pin and automatic choice. |
 | (also in run_stump / run_air) | Hide keeps history and stays hidden while beaconing; remove deletes everything and a node on the air returns empty; deleting a conversation removes messages and voice notes and a new one starts normally. |
-| `python3 engine-tests/run_web.py` | Billboard and file shelf against the fake node: posting proven by refetch, a dropped post detected, 80/600 limits, `+` `$` and line breaks intact, UTF-8 download names, a UTF-8 `X-Filename` written on a raw socket stored exactly (with the node's filename rules), the node's 400/503/507 answers, and features switched off reading as "off". |
+| `python3 engine-tests/run_web.py` | Billboard, file shelf, plugins and apps against the fake node, as a current node (JSON answers: 201/400/507 posts; upload name, balance and error tokens; percent-encoded and Latin-1 names; `/plugins.json`, `/tools.json` and version order) and as an older one (`FAKE_STUMP_OLD=1`: posting proven by refetch, a dropped post detected, 80/600 limits, `+` `$` and line breaks intact, UTF-8 download names, a UTF-8 `X-Filename` written on a raw socket stored exactly (with the node's filename rules), the node's 400/503/507 answers, and features switched off reading as "off"). |
 | `python3 engine-tests/run_stump.py` | A fake Stump over the mesh (LXMF) and over Wi-Fi (HTTP), covering everything in the Stump section above. |
 
 Kotlin was checked with `kotlinc` 2.2.10 for syntax only. An APK has not been

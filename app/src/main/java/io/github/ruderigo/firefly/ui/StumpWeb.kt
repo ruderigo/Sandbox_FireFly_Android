@@ -6,6 +6,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -56,6 +58,7 @@ fun ColumnScope.BoardPane(key: String, board: JSONObject?, onBoard: (JSONObject)
         "dropped" to stringResource(R.string.board_dropped),
         "unreachable" to stringResource(R.string.web_unreachable),
         "off" to stringResource(R.string.board_off),
+        "storage" to stringResource(R.string.board_storage),
     )
     val postedText = stringResource(R.string.board_posted)
     val errorText = stringResource(R.string.web_error_generic)
@@ -279,8 +282,13 @@ private fun TransferBar(t: FileTransfers.Transfer) {
     val upload = t.kind == FileTransfers.Kind.UPLOAD
     val headline = when (t.state) {
         FileTransfers.State.RUNNING -> stringResource(if (upload) R.string.files_uploading else R.string.files_downloading, t.name)
-        FileTransfers.State.DONE -> if (upload) t.message.ifBlank { stringResource(R.string.files_uploaded, t.name) }
-                                    else stringResource(R.string.files_saved, t.name)
+        FileTransfers.State.DONE -> when {
+            !upload -> stringResource(R.string.files_saved, t.name)
+            t.slot -> stringResource(R.string.files_slot_delivered, t.storedName ?: t.name)
+            t.balance != null -> stringResource(R.string.files_uploaded_balance, t.storedName ?: t.name, t.balance)
+            t.storedName != null -> stringResource(R.string.files_uploaded, t.storedName)
+            else -> t.message.ifBlank { stringResource(R.string.files_uploaded, t.name) }    // an older node's sentence
+        }
         FileTransfers.State.FAILED -> stringResource(R.string.files_failed, t.name, failReason(t))
     }
     Column(Modifier.fillMaxWidth().background(Amber.Sidebar).padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -303,7 +311,17 @@ private fun TransferBar(t: FileTransfers.Transfer) {
 }
 
 @Composable
-private fun failReason(t: FileTransfers.Transfer): String = when (t.status) {
+private fun failReason(t: FileTransfers.Transfer): String = when (t.error) {
+    // A current node names the failure with a stable token; an older one only has the status.
+    "no_filename", "empty" -> stringResource(R.string.files_fail_400)
+    "no_card" -> stringResource(R.string.files_fail_503)
+    "full" -> stringResource(R.string.files_fail_507)
+    "interrupted" -> stringResource(R.string.files_fail_500)
+    else -> failByStatus(t)
+}
+
+@Composable
+private fun failByStatus(t: FileTransfers.Transfer): String = when (t.status) {
     400 -> stringResource(R.string.files_fail_400)
     404 -> stringResource(R.string.files_fail_404)
     500 -> stringResource(R.string.files_fail_500)
@@ -331,5 +349,93 @@ private fun WebProblem(r: JSONObject, onRetry: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium.copy(color = Amber.Muted))
         Spacer(Modifier.height(8.dp))
         Button(stringResource(R.string.web_retry), primary = false, onClick = onRetry)
+    }
+}
+
+
+/** This app's version, as the node compares versions (0.5.0-beta.1). */
+fun myVersion(ctx: android.content.Context): String =
+    runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "0"
+
+/**
+ * "A newer FireFly is on this Stump" (from /tools.json): download it where the
+ * user chooses, then hand it to Android's installer. It installs over this one
+ * only if it's signed with the same key; Android says so if it isn't.
+ */
+@Composable
+fun UpdateBanner(key: String, tools: JSONObject?) {
+    val update = tools?.optJSONObject("update") ?: return
+    val ctx = LocalContext.current
+    val transfer by FileTransfers.current.collectAsState()
+    val file = update.optString("file").ifBlank { "FireFly-Android-${update.optString("version")}.apk" }
+    val mine = transfer?.takeIf { it.nodeKey == key && it.kind == FileTransfers.Kind.DOWNLOAD && it.name == file }
+    val busy = transfer?.state == FileTransfers.State.RUNNING
+    var dismissed by remember(key) { mutableStateOf(false) }
+    if (dismissed && mine == null) return
+
+    val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/vnd.android.package-archive")) { uri ->
+        if (uri != null) FileTransfers.download(ctx, key, update.optString("url"), file,
+            if (update.isNull("size")) -1L else update.optLong("size", -1L), uri)
+    }
+    Column(Modifier.fillMaxWidth().background(Amber.Sidebar).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.update_on_node, update.optString("version")),
+                style = MaterialTheme.typography.labelLarge.copy(color = Amber.Ember), modifier = Modifier.weight(1f))
+            val target = mine?.target
+            when {
+                mine != null && mine.state == FileTransfers.State.RUNNING -> Text(
+                    if (mine.total > 0) "${100 * mine.done / mine.total} %" else Formatter.formatShortFileSize(ctx, mine.done),
+                    style = MaterialTheme.typography.labelMedium)
+                mine != null && mine.state == FileTransfers.State.DONE && target != null ->
+                    Button(stringResource(R.string.update_install)) { install(ctx, target) }
+                else -> {
+                    Button(stringResource(R.string.update_get), enabled = !busy) { save.launch(file) }
+                    Spacer(Modifier.width(4.dp))
+                    Text("✕", modifier = Modifier.clip(Small).clickable { dismissed = true; if (mine != null) FileTransfers.clear() }.padding(8.dp),
+                        style = MaterialTheme.typography.labelLarge.copy(color = Amber.Muted))
+                }
+            }
+        }
+        Text(when {
+                mine != null && mine.state == FileTransfers.State.FAILED -> stringResource(R.string.files_failed, file, failReason(mine))
+                mine != null && mine.state == FileTransfers.State.DONE -> stringResource(R.string.update_ready)
+                else -> listOfNotNull(
+                    if (update.isNull("size")) null else Formatter.formatShortFileSize(ctx, update.optLong("size")),
+                    stringResource(R.string.update_same_key)).joinToString(" · ")
+            },
+            style = MaterialTheme.typography.labelSmall.copy(
+                color = if (mine?.state == FileTransfers.State.FAILED) Amber.Error else Amber.Dim),
+            modifier = Modifier.padding(top = 2.dp))
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))
+}
+
+/** Android's installer, after the user has allowed FireFly to install apps (asked once). */
+private fun install(ctx: android.content.Context, apk: android.net.Uri) {
+    val pm = ctx.packageManager
+    if (android.os.Build.VERSION.SDK_INT >= 26 && !pm.canRequestPackageInstalls()) {
+        ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            android.net.Uri.parse("package:" + ctx.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        return
+    }
+    val view = android.content.Intent(android.content.Intent.ACTION_VIEW)
+        .setDataAndType(apk, "application/vnd.android.package-archive")
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { ctx.startActivity(view) }
+}
+
+/** The node's plugin commands (/plugins.json) as chips: a tap puts "!roll " in the box. */
+@Composable
+fun PluginChips(plugins: JSONObject?, onPick: (String) -> Unit) {
+    val commands = plugins?.optJSONArray("commands")?.objects() ?: return
+    if (commands.isEmpty()) return
+    Row(Modifier.fillMaxWidth().background(Amber.Sidebar).horizontalScroll(rememberScrollState())
+        .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        commands.forEach { c ->
+            val word = c.optString("word")
+            Text(word, modifier = Modifier.padding(end = 6.dp).clip(Small).border(1.dp, Amber.Border, Small)
+                .clickable { onPick("$word ") }.padding(horizontal = 8.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelMedium.copy(color = Amber.Action))
+        }
     }
 }

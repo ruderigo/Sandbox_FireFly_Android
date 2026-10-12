@@ -100,7 +100,7 @@ def parse_line(line):
         return {"kind": "tier_refused", "room": parts[0] if parts else "",
                 "tier": parts[1] if len(parts) > 1 else "", "text": line}
     if line.startswith("⧗"):
-        return {"kind": "slow", "text": line}           # too many voice notes too fast
+        return {"kind": "slow", "text": line}           # slow down: voice notes, or plugin commands
     if line.startswith("⊖ "):
         return {"kind": "no_such_nick", "nick": line[2:].strip()}
     if line.startswith("* "):

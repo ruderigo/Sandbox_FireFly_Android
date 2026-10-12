@@ -383,6 +383,16 @@ def stump_files(key):
     return _j(stump_web.files(_need().http, _wifi_base(key)))
 
 
+def stump_plugins(key):
+    from . import stump_web
+    return _j(stump_web.plugins(_need().http, _wifi_base(key)))
+
+
+def stump_tools(key, my_version):
+    from . import stump_web
+    return _j(stump_web.tools(_need().http, _wifi_base(key), str(my_version)))
+
+
 def stump_download_url(key, name):
     from . import stump_web
     return stump_web.download_url(_wifi_base(key), name)

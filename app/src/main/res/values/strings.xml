@@ -259,4 +259,12 @@
     <string name="web_unreachable">Can\'t reach the node over Wi-Fi. Are you on its network?</string>
     <string name="web_error">The node answered with an error (%1$d).</string>
     <string name="web_error_generic">That didn\'t work. Try again.</string>
+    <string name="board_storage">The node couldn\'t save the post (its card may be full).</string>
+    <string name="files_uploaded_balance">%1$s is on the shelf. Your balance: %2$d</string>
+    <string name="files_slot_delivered">%1$s was delivered to the slot set aside for you.</string>
+    <string name="update_on_node">FireFly %1$s is on this Stump</string>
+    <string name="update_get">Get it</string>
+    <string name="update_install">Install</string>
+    <string name="update_ready">Downloaded. Tap Install; Android asks once to let FireFly install apps.</string>
+    <string name="update_same_key">installs over this one only if it\'s signed with the same key</string>
 </resources>

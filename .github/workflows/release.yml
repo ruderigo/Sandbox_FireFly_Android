@@ -1,6 +1,6 @@
 name: Build & Release APK
 
-# Push a tag like v0.4.0 (matching versionName in app/build.gradle.kts) to build the
+# Push a tag like v0.5.0 or v0.5.0-beta.1 (matching versionName in app/build.gradle.kts) to build the
 # release APK, signed with your key, and publish it as a GitHub Release.
 # "Run workflow" by hand builds the same APK as a downloadable artifact, no release.
 #
@@ -99,4 +99,5 @@ jobs:
         with:
           files: ${{ steps.apk.outputs.path }}
           draft: false
-          prerelease: false
+          # A tag with a suffix (v0.5.0-beta.1) is a pre-release: it doesn't become "latest".
+          prerelease: ${{ contains(github.ref_name, '-') }}

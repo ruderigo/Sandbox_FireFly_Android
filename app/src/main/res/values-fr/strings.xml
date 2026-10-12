@@ -259,4 +259,12 @@
     <string name="web_unreachable">Impossible de joindre le nœud en Wi-Fi. Êtes-vous sur son réseau ?</string>
     <string name="web_error">Le nœud a répondu par une erreur (%1$d).</string>
     <string name="web_error_generic">Ça n\'a pas fonctionné. Réessayez.</string>
+    <string name="board_storage">Le nœud n\'a pas pu enregistrer l\'annonce (sa carte est peut-être pleine).</string>
+    <string name="files_uploaded_balance">%1$s est sur l\'étagère. Votre solde : %2$d</string>
+    <string name="files_slot_delivered">%1$s a été déposé dans l\'emplacement qui vous était réservé.</string>
+    <string name="update_on_node">FireFly %1$s est sur ce Stump</string>
+    <string name="update_get">Le récupérer</string>
+    <string name="update_install">Installer</string>
+    <string name="update_ready">Téléchargé. Touchez Installer ; Android demande une fois d\'autoriser FireFly à installer des applis.</string>
+    <string name="update_same_key">s\'installe par-dessus celle-ci seulement si elle est signée avec la même clé</string>
 </resources>

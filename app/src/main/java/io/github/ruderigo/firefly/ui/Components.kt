@@ -118,8 +118,10 @@ fun Field(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifi
  */
 @Composable
 fun Composer(hint: String, counter: @Composable (String) -> Unit = {}, onVoice: ((io.github.ruderigo.firefly.audio.Recorded) -> Unit)? = null,
-             onSend: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
+             draft: MutableState<String>? = null, onSend: (String) -> Unit) {
+    // [draft] lets the screen put text in the box (a plugin's !word); otherwise the box keeps its own.
+    val own = remember { mutableStateOf("") }
+    var text by (draft ?: own)
     val recording = remember { RecordingState() }
     Column(Modifier.fillMaxWidth().background(Amber.Sidebar).navigationBarsPadding().imePadding()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))
