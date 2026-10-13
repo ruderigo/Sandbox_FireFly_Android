@@ -8,10 +8,20 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.3: beta, following the Stump beta (1.0.0-beta.2)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.4: beta, following the Stump beta (1.0.0-beta.2)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
+
+### 0.5.0-beta.4: `/node.json` as the Stump team shipped it
+- Find Stumps reads `/node.json` exactly as it landed on Stump `main`
+  (next release): name, LXMF address, `release` (firmware), hotspot
+  address, `chain` (`null` unless chained), and `features`. The card now
+  shows the release and what the node offers, and says so in red when a
+  node has chat switched off.
+- A `/node.json` whose name or LXMF address is `null` (no name set, LoRa
+  off) is still read as one. A beta.2 node answers `/node.json` with its
+  home page (HTML); that falls back to `/chain.json`, as before.
 
 ### 0.5.0-beta.3: Find Stumps
 A **Find Stumps** button on the Stumps tab: every way to reach a Stump from
@@ -427,7 +437,7 @@ Run from the repository root with `pip install rns==1.5.5 lxmf==1.2.0`:
 | `python3 engine-tests/run_stamps.py` | FireFly's stamp search through LXMF's own Android entry point: valid propagation and delivery stamps at costs 8-16 by LXMF's validator, timing, and cancellation the way LXMF cancels. |
 | `python3 engine-tests/run_propagation.py` | A real upstream LXMF propagation node on a Stump's identity (stamp cost 16, 2 KB limit). Found without its announce; stamps with multiprocessing unavailable; an offline friend and a never-online contact collect by sync; no-path messages go to the node at once; over-limit refused; multi-round sync with no duplicates; Stump chat and "off" never use the node; pin and automatic choice. |
 | (also in run_stump / run_air) | Hide keeps history and stays hidden while beaconing; remove deletes everything and a node on the air returns empty; deleting a conversation removes messages and voice notes and a new one starts normally. |
-| `python3 engine-tests/run_discovery.py` | Three fake Stumps and a plain web server on loopback addresses (port 80, run as root): a sweep of the /24 finds exactly the Stumps in about a second, reads `/node.json` where it exists and falls back to `/chain.json` and `/files.json`, ranks the slow one last, and never polls the chat. Plus subnet sizes, bars and hotspot names. |
+| `python3 engine-tests/run_discovery.py` | Five fake Stumps and a plain web server on loopback addresses (port 80, run as root): a sweep of the /24 finds exactly the Stumps in about a second, reads `/node.json` in the shape barkeep.py builds (nulls included), falls back to `/chain.json` when it's an HTML home page and to `/files.json` on older nodes, ranks the slow one last, and never polls the chat. Plus subnet sizes, bars and hotspot names. |
 | `python3 engine-tests/run_web.py` | Billboard, file shelf, plugins, apps and chain against the fake node, as a current node (JSON answers: 201/400/507 posts; upload name, balance and error tokens; percent-encoded and Latin-1 names; `/plugins.json`, `/tools.json` and version order; `/chain.json`; beacons with extra fields) and as an older one (`FAKE_STUMP_OLD=1`: posting proven by refetch, a dropped post detected, 80/600 limits, `+` `$` and line breaks intact, UTF-8 download names, a UTF-8 `X-Filename` written on a raw socket stored exactly (with the node's filename rules), the node's 400/503/507 answers, and features switched off reading as "off"). |
 | `python3 engine-tests/run_stump.py` | A fake Stump over the mesh (LXMF) and over Wi-Fi (HTTP), covering everything in the Stump section above. |
 

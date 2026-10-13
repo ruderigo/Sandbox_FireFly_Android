@@ -361,6 +361,11 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0):
             if delay:
                 time.sleep(delay)
             if u.path == "/node.json":
+                if isinstance(node, str):                       # a beta.2 node: the home page, as HTML
+                    body = node.encode()
+                    self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+                    return
                 return self._json(node) if node is not None else self._text(404, "not found")
             if u.path in ("/billboard.json", "/billboard"):
                 if self._off("BOARD"):

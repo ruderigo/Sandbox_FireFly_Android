@@ -25,8 +25,16 @@ def check(name, ok, detail=""):
     print(("PASS " if ok else "FAIL ") + name + (f"  ({detail})" if detail and not ok else ""))
     fails += 0 if ok else 1
 
-A = {"name": "LaBuche", "version": "Beta A", "lxmf": "53d91d2f" + "0" * 20 + "48e4", "ap_ip": "192.168.4.1",
-     "chain": {"enabled": True, "role": "root", "below": ["192.168.4.23"]}}
+# /node.json exactly as barkeep.py builds it (Stump main after 1.0.0-beta.2): chain is null unless
+# chained, then the /chain.json object.
+A = {"name": "LaBuche", "lxmf": "53d91d2f" + "0" * 20 + "48e4", "version": "Beta A", "release": "1.0.0-beta.2",
+     "ap_ip": "192.168.4.1",
+     "chain": {"enabled": True, "role": "root", "ap_ip": "192.168.4.1", "channel": 11, "secret": True,
+               "uplink": None, "below": ["192.168.4.23"]},
+     "features": ["chat", "billboard", "files", "about"]}
+UNNAMED = {"name": None, "lxmf": None, "version": "Beta A", "release": "1.0.0-beta.2", "ap_ip": "192.168.6.1",
+           "chain": None, "features": ["billboard"]}
+HOME_PAGE = "<!DOCTYPE html><html><body>Stump</body></html>"
 polled = []
 class Spy(FakeRRC):
     def poll(self, key, since):
@@ -37,6 +45,8 @@ serve_http(80, Spy(rns_verify), FakeWeb(), host="127.0.0.5", node=A)            
 serve_http(80, Spy(rns_verify), FakeWeb(), host="127.0.0.9")                      # beta.2: /chain.json only
 os.environ.pop("FAKE_STUMP_OLD", None)
 serve_http(80, Spy(rns_verify), FakeWeb(), host="127.0.0.12", delay=0.25)         # a far one: slow answers
+serve_http(80, Spy(rns_verify), FakeWeb(), host="127.0.0.14", node=UNNAMED)        # no name, LoRa off
+serve_http(80, Spy(rns_verify), FakeWeb(), host="127.0.0.16", node=HOME_PAGE)      # beta.2: /node.json is the home page
 
 class Plain(BaseHTTPRequestHandler):                                              # not a Stump
     def log_message(self, *a): pass
@@ -52,6 +62,14 @@ print("-- one address")
 p = discovery.probe(http, "http://127.0.0.5")
 check("node.json: name, LXMF address, chain role", p["stump"] and p["name"] == "LaBuche" and p["lxmf"] == A["lxmf"]
       and p["chain"]["role"] == "root" and p["chain"]["below"] == 1 and p["via"] == "/node.json", p)
+check("node.json: release and features", p["release"] == "1.0.0-beta.2" and p["features"] == ["chat", "billboard", "files", "about"], p)
+p2 = discovery.probe(http, "http://127.0.0.14")
+check("node.json with null name and lxmf is still node.json; chain null = not chained",
+      p2["stump"] and p2["via"] == "/node.json" and p2["name"] is None and p2["lxmf"] is None
+      and p2["chain"]["enabled"] is False and p2["features"] == ["billboard"], p2)
+p3 = discovery.probe(http, "http://127.0.0.16")
+check("a node that answers /node.json with its home page (HTML): falls back to /chain.json",
+      p3["stump"] and p3["via"] == "/chain.json", p3)
 check("steady: 5 answers, none lost, 3 bars", p["samples"] == 5 and p["lost"] == 0 and p["steady_bars"] == 3, p)
 p = discovery.probe(http, "http://127.0.0.9")
 check("no node.json yet: recognised by /chain.json, no name", p["stump"] and p["via"] == "/chain.json" and p["name"] is None, p)
@@ -66,8 +84,9 @@ print("-- the whole /24")
 t = time.monotonic()
 found = discovery.sweep(http, "127.0.0.1", 24)
 took = time.monotonic() - t
-check("sweep finds exactly the three Stumps", sorted(f["base"] for f in found) ==
-      ["http://127.0.0.12", "http://127.0.0.5", "http://127.0.0.9"], [f["base"] for f in found])
+check("sweep finds exactly the five Stumps", sorted(f["base"] for f in found) ==
+      ["http://127.0.0.12", "http://127.0.0.14", "http://127.0.0.16", "http://127.0.0.5", "http://127.0.0.9"],
+      [f["base"] for f in found])
 check(f"...in a few seconds ({took:.1f} s)", took < 10)
 check("the slow one is ranked last", found[-1]["base"] == "http://127.0.0.12" and found[-1]["median_ms"] >= 240, found[-1])
 check("skip: the gateway isn't listed twice", "http://127.0.0.5" not in

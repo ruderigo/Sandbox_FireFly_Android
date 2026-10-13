@@ -14,8 +14,10 @@ Probing must not change anything on the node. /rrc/poll would make the
 phone a chat user (everyone sees "✓ guest-…"), so it's never used here.
 Requests, in order:
 
-  GET /node.json    name, version, lxmf, ap_ip, chain   (asked of the Stump
-                    team for discovery; read defensively until it ships)
+  GET /node.json    name, lxmf, version, release, ap_ip, chain (null or the
+                    /chain.json object), features. After 1.0.0-beta.2; an
+                    older node answers it with its home page (HTML), so
+                    anything not JSON falls through to the next request.
   GET /chain.json   any 1.0.0-beta.2 node; {"enabled": …} marks a Stump
   GET /files.json, /billboard.json   older nodes, when they offer them
 
@@ -74,20 +76,25 @@ def identify(http, base, timeout_ms=PROBE_TIMEOUT_MS):
     status, data, ms = _get(http, base + "/node.json", timeout_ms)
     if status < 0:
         return None                                  # nothing answered: no need to ask twice
-    if isinstance(data, dict) and (data.get("name") or _hash(data.get("lxmf"))):
+    if isinstance(data, dict) and any(k in data for k in ("name", "lxmf", "release", "ap_ip", "features")):
+        # Any of its keys may be null (a node without a name, or with LoRa off): still /node.json.
+        feats = data.get("features")
         return {"base": base, "via": "/node.json", "name": str(data.get("name") or "")[:64] or None,
                 "version": str(data["version"])[:32] if data.get("version") else None,
+                "release": str(data["release"])[:32] if data.get("release") else None,
                 "lxmf": _hash(data.get("lxmf")), "ap_ip": data.get("ap_ip") if isinstance(data.get("ap_ip"), str) else None,
-                "chain": _chain_summary(data.get("chain")), "first_ms": ms}
+                "chain": _chain_summary(data.get("chain")),        # null unless chained, else the /chain.json object
+                "features": [str(f) for f in feats][:12] if isinstance(feats, list) else None,
+                "first_ms": ms}
     status, data, ms2 = _get(http, base + "/chain.json", timeout_ms)
     if isinstance(data, dict) and "enabled" in data:
-        return {"base": base, "via": "/chain.json", "name": None, "version": None, "lxmf": None,
+        return {"base": base, "via": "/chain.json", "name": None, "version": None, "release": None, "features": None, "lxmf": None,
                 "ap_ip": data.get("ap_ip") if isinstance(data.get("ap_ip"), str) else None,
                 "chain": _chain_summary(data), "first_ms": ms2}
     for path, key in (("/files.json", "files"), ("/billboard.json", "posts")):      # older nodes
         status, data, ms3 = _get(http, base + path, timeout_ms)
         if isinstance(data, dict) and key in data:
-            return {"base": base, "via": path, "name": None, "version": None, "lxmf": None, "ap_ip": None,
+            return {"base": base, "via": path, "name": None, "version": None, "release": None, "features": None, "lxmf": None, "ap_ip": None,
                     "chain": _chain_summary(None), "first_ms": ms3}
     return None
 

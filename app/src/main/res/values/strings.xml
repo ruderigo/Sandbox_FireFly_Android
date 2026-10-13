@@ -307,4 +307,5 @@
     <string name="find_open">Open</string>
     <string name="find_steady_detail">%1$d ms · %2$d/%3$d lost</string>
     <string name="via_both">LoRa + Wi-Fi</string>
+    <string name="find_chat_off">chat is off on this node</string>
 </resources>

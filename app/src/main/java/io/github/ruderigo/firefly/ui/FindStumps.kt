@@ -234,6 +234,15 @@ private fun StumpFound(s: JSONObject, onOpen: () -> Unit) {
                 if (s.isNull("median_ms")) null
                 else stringResource(R.string.find_steady_detail, s.optInt("median_ms"), s.optInt("lost"), s.optInt("samples")),
             ).joinToString("  "), style = MaterialTheme.typography.labelSmall)
+            // From /node.json: the firmware release, and what the node offers (chat may be switched off).
+            val features = s.optJSONArray("features")?.let { a -> List(a.length()) { a.getString(it) } }
+            val release = s.optString("release").takeIf { it.isNotBlank() && it != "null" }
+            if (release != null || features != null) Text(listOfNotNull(
+                release,
+                features?.takeIf { it.isNotEmpty() }?.joinToString(" · "),
+                if (features != null && "chat" !in features) stringResource(R.string.find_chat_off) else null,
+            ).joinToString("  "), style = MaterialTheme.typography.labelSmall.copy(
+                color = if (features != null && "chat" !in features) Amber.Error else Amber.Dim))
         }
         Bars(if (s.has("steady_bars")) s.optInt("steady_bars") else null, Modifier.padding(horizontal = 8.dp))
         Text(stringResource(R.string.find_open), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Ember))

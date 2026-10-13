@@ -1,6 +1,6 @@
 # FireFly client quickstart: interoperating with FireFly
 
-FireFly for Android 0.5.0-beta.3 · October 2026 (Stump 1.0.0-beta.2)
+FireFly for Android 0.5.0-beta.4 · October 2026 (Stump 1.0.0-beta.2)
 
 A client interoperates with FireFly if it speaks standard LXMF and reads and writes LXMF's audio field the way this guide describes. Nothing here is FireFly-only: it's LXMF, Reticulum, and the Stump node's own protocol.
 
@@ -250,7 +250,7 @@ FireFly shows a node's billboard and file shelf, offers its plugin commands, and
 
 FireFly's Find Stumps screen probes addresses (the Wi-Fi gateway, each address of the local /24, a hotspot just joined) without changing anything on a node. **Never use `/rrc/poll` to probe**: it makes you a chat user, and everyone in the room sees `✓ guest-…`. FireFly asks, in order:
 
-1. `GET /node.json`: `{"name", "version", "lxmf", "ap_ip", "chain": {"enabled", "role", "below": [...]}}`. Requested from the Stump team for discovery; FireFly reads any of these fields that are present and ignores the rest.
+1. `GET /node.json` (Stump `main`, after 1.0.0-beta.2): `{"name", "lxmf", "version", "release", "ap_ip", "chain", "features"}`. `chain` is `null` unless the node is chained, then the `/chain.json` object; `name` and `lxmf` can be `null`. A beta.2 node answers this path with its home page (HTML): anything that isn't a JSON object means "try the next request". FireFly shows `release` and `features`, and flags a node whose `features` lacks `chat`.
 2. `GET /chain.json`: any 1.0.0-beta.2 node answers `{"enabled": …}`, which identifies a Stump (no name).
 3. `GET /files.json` or `/billboard.json`: older nodes, when they offer those.
 
