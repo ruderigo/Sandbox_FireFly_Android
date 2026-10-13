@@ -41,6 +41,7 @@ DEFAULTS = {
     "fallback_to_propagation": True,
     "sync_interval_min": 30,         # 0 = manual only (plus syncs when the radio comes up / app opens)
     "stump_wifi_default": "http://192.168.4.1",
+    "stump_ssids": [],               # hotspots joined as Stumps from Find Stumps (marked "Stump" in scans)
     "voice_mode": 16,                # Opus (natural voice) everywhere; 0 = Automatic; 3-9 = a Codec 2 mode
     "log_level": 3,
     "settings_version": 4,

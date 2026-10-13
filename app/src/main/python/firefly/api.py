@@ -244,13 +244,36 @@ def remove_ble_device(address):
 
 # ------------------------------------------------------------------ Stump
 def stump_nodes():
+    """One entry per Stump: a node reached over both LoRa and Wi-Fi (the same LXMF address,
+    which a Wi-Fi node gives in its poll) is one row. The row is the transport to open first
+    (Wi-Fi while it answers, else LoRa); the other ones are in "others"."""
     c = _need()
     rows = c.store.stump_nodes()
     for r in rows:
         r["open"] = r["key"] in c.sessions
         if r["transport"] == "mesh":
             r["hops"] = c.hops(r["address"])
-    return _j(rows)
+            r["lxmf"] = r["address"]
+    groups, order = {}, []
+    for r in rows:
+        g = r.get("lxmf") or r["key"]
+        if g not in groups:
+            groups[g] = []
+            order.append(g)
+        groups[g].append(r)
+    out = []
+    for g in order:
+        members = groups[g]
+        members.sort(key=lambda r: (0 if r["transport"] == "wifi" and r.get("online") else
+                                    1 if r["transport"] == "mesh" else 2))
+        first = dict(members[0])
+        first["others"] = members[1:]
+        first["transports"] = sorted({m["transport"] for m in members})
+        first["unread_dms"] = sum(m.get("unread_dms") or 0 for m in members)
+        first["name"] = next((m["name"] for m in members if m.get("name") and not str(m["name"]).startswith("Stump Wi-Fi (")),
+                             first.get("name"))
+        out.append(first)
+    return _j(out)
 
 
 def delete_conversation(peer_hex):
@@ -410,6 +433,64 @@ def stump_upload_url(key):
 def stump_upload_cost(name, credits=True):
     from . import stump_web
     return stump_web.upload_cost(name, bool(credits))
+
+
+# ------------------------------------------------------------------ finding Stumps
+def discover_probe(base):
+    """A Stump at this address (the Wi-Fi gateway, or a hotspot just joined)? Plus how steady."""
+    from . import discovery
+    from .stump_session import normalize_base
+    return _j(discovery.probe(_need().http, normalize_base(base)))
+
+
+def discover_lan(own_ip, prefix, skip_json="[]"):
+    """Every Stump on the phone's local network (its /24). Takes a few seconds."""
+    from . import discovery
+    return _j(discovery.sweep(_need().http, str(own_ip), int(prefix), skip=json.loads(skip_json or "[]")))
+
+
+def discover_ssids(scan_json):
+    """Mark a Wi-Fi scan: [{"ssid", "bssid", "rssi", "freq", "secured"}] -> the same with
+    "stump" (yes | likely | maybe) and "bars", strongest first, one row per name."""
+    from . import discovery
+    c = _need()
+    known = c.settings.get("stump_ssids") or []
+    best = {}
+    for ap in json.loads(scan_json or "[]"):
+        ssid = (ap.get("ssid") or "").strip()
+        kind = discovery.looks_like_stump(ssid, known)
+        if kind == "no":
+            continue
+        if ssid not in best or (ap.get("rssi") or -999) > (best[ssid].get("rssi") or -999):
+            best[ssid] = dict(ap, ssid=ssid, stump=kind, bars=discovery.signal_bars(ap.get("rssi")))
+    order = {"yes": 0, "likely": 1, "maybe": 2}
+    return _j(sorted(best.values(), key=lambda a: (order[a["stump"]], -(a.get("rssi") or -999))))
+
+
+def remember_stump_ssid(ssid):
+    c = _need()
+    ssid = (ssid or "").strip()
+    known = list(c.settings.get("stump_ssids") or [])
+    if ssid and ssid not in known:
+        c.settings.update({"stump_ssids": (known + [ssid])[-50:]})
+
+
+def stump_lora_link(key):
+    """For a Stump heard on LoRa: hops, and RSSI/SNR of the last packet from it, with bars."""
+    import RNS
+    from . import discovery
+    c = _need()
+    if not str(key).startswith("mesh:"):
+        return _j({})
+    addr = str(key)[5:]
+    try:
+        hops = RNS.Transport.hops_to(bytes.fromhex(addr)) if RNS.Transport.has_path(bytes.fromhex(addr)) else None
+    except Exception:
+        hops = None
+    sig = c.store.last_signal(addr)
+    snr = sig.get("snr") if sig else None
+    return _j({"hops": hops, "rssi": sig.get("rssi") if sig else None, "snr": snr,
+               "heard": sig.get("ts") if sig else None, "bars": discovery.lora_bars(snr)})
 
 
 # ------------------------------------------------------------------ identity

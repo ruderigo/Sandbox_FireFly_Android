@@ -1,6 +1,6 @@
 # FireFly client quickstart: interoperating with FireFly
 
-FireFly for Android 0.5.0-beta.2 · October 2026 (Stump 1.0.0-beta.2)
+FireFly for Android 0.5.0-beta.3 · October 2026 (Stump 1.0.0-beta.2)
 
 A client interoperates with FireFly if it speaks standard LXMF and reads and writes LXMF's audio field the way this guide describes. Nothing here is FireFly-only: it's LXMF, Reticulum, and the Stump node's own protocol.
 
@@ -245,6 +245,18 @@ FireFly shows a node's billboard and file shelf, offers its plugin commands, and
 - **Plugins:** `/plugins.json` lists each plugin's commands. FireFly offers them as `!word` (the `trigger`), except stumpid's and fservbot's, which are slash only. A `!word` is an ordinary room line; the plugin answers in the room from its own nick.
 - **`⧗` names nothing.** It answers too many voice notes *or* too many plugin commands. FireFly fails a pending voice note on `⧗` only if that note was the last thing it sent, within the last minute.
 - **Updates:** `/tools.json` lists the FireFly apps on the node's card. Compare versions as the node does: split on `.`, numbers as numbers, anything else (`0-beta`) below any number, so `0.5.0-beta.1` < `0.5.0`. Download from the `url` given; it installs over an existing app only if signed with the same key.
+
+## Finding Stumps without joining their chat
+
+FireFly's Find Stumps screen probes addresses (the Wi-Fi gateway, each address of the local /24, a hotspot just joined) without changing anything on a node. **Never use `/rrc/poll` to probe**: it makes you a chat user, and everyone in the room sees `✓ guest-…`. FireFly asks, in order:
+
+1. `GET /node.json`: `{"name", "version", "lxmf", "ap_ip", "chain": {"enabled", "role", "below": [...]}}`. Requested from the Stump team for discovery; FireFly reads any of these fields that are present and ignores the rest.
+2. `GET /chain.json`: any 1.0.0-beta.2 node answers `{"enabled": …}`, which identifies a Stump (no name).
+3. `GET /files.json` or `/billboard.json`: older nodes, when they offer those.
+
+How steady a link is: five small GETs of the same endpoint, one after another; the median time and the count lost give 0–3 bars (3: none lost and under 150 ms; 2: at most one in five lost and under 400 ms; 1: under 60 % lost). Wi-Fi signal: ≥ −60 dBm 3 bars, ≥ −72 dBm 2, ≥ −85 dBm 1. LoRa: SNR of the last packet heard, ≥ 5 dB 3 bars, ≥ −3 dB 2, ≥ −10 dB 1 (SF8 decodes to about −10 dB).
+
+The same Stump reached over LoRa and Wi-Fi is matched by the `node.lxmf` address in `/rrc/poll` (or `/node.json`), so a client can show it once.
 
 ## Blocking and deleting
 

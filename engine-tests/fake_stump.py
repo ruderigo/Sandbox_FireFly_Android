@@ -35,6 +35,7 @@ class FakeRRC:
         self.voice_sent = {}            # key -> time of the last voice note (rate limit)
         self.nonces = {}
         self.plugin_calls = {}          # key -> recent !command times (the tavern plugin's flood guard)
+        self.node_lxmf = "00" * 16      # what the poll's node field gives as this node's LXMF address
 
     def _id(self):
         self.next_id += 1
@@ -206,7 +207,7 @@ class FakeRRC:
             return {"room": u["room"], "nick": u["nick"], "topic": self.topics[u["room"]],
                     "rooms": sorted(self.rooms), "messages": msgs, "dms": dms,
                     "users": [x["nick"] for x in self.users.values() if x["room"] == u["room"]], "stumps": [],
-                    "node": {"name": "LaBuche Test", "lxmf": "00" * 16}}
+                    "node": {"name": "LaBuche Test", "lxmf": self.node_lxmf}}
 
 
 def rns_verify(pub_hex, sig_hex, nonce_hex):
@@ -315,7 +316,9 @@ class FakeWeb:
             return data
 
 
-def serve_http(port, rrc, web=None):
+def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0):
+    """node: what /node.json answers (a dict), or None for a node without it (404).
+    delay: seconds added to every answer, to look like a far or busy Stump."""
     web = web or FakeWeb()
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a): pass
@@ -355,6 +358,10 @@ def serve_http(port, rrc, web=None):
 
         def do_GET(self):
             u = urlparse(self.path)
+            if delay:
+                time.sleep(delay)
+            if u.path == "/node.json":
+                return self._json(node) if node is not None else self._text(404, "not found")
             if u.path in ("/billboard.json", "/billboard"):
                 if self._off("BOARD"):
                     return self._text(404, "not offered on this node")
@@ -465,7 +472,7 @@ def serve_http(port, rrc, web=None):
             replies, room = rrc.handle(self._key(), line)
             self._json({"replies": replies, "room": room})
 
-    srv = ThreadingHTTPServer(("127.0.0.1", port), H)
+    srv = ThreadingHTTPServer((host, port), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 

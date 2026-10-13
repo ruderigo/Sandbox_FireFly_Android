@@ -216,6 +216,10 @@ def _attr(obj, name):
     return v
 
 
+def _is_hash(v):
+    return isinstance(v, str) and len(v) == 32 and all(c in "0123456789abcdefABCDEF" for c in v)
+
+
 def stump_size(line):
     from .core import single_packet_size
     return single_packet_size(line)
@@ -416,6 +420,8 @@ class StumpSession:
         node_info = data.get("node")
         if isinstance(node_info, dict) and node_info.get("name"):
             fields["name"] = str(node_info["name"])[:64]     # the node's own name, as on LoRa
+        if isinstance(node_info, dict) and _is_hash(node_info.get("lxmf")):
+            fields["lxmf"] = node_info["lxmf"].lower()        # matches this node's LoRa entry
         node = self.store.stump_node(self.key) or {}
         known = {r["name"]: r for r in node.get("rooms", [])}
         fields["rooms"] = [known.get(n, {"name": n}) for n in data.get("rooms") or []]

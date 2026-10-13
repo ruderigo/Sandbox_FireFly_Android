@@ -52,19 +52,25 @@ fun StumpsScreen(go: (Route) -> Unit) {
     val hidden = engineData(0) { Engine.call("stump_hidden_count").toIntOrNull() ?: 0 }
     var acting by remember { mutableStateOf<JSONObject?>(null) }
     var removing by remember { mutableStateOf<JSONObject?>(null) }
+    // A row may stand for one Stump on LoRa and Wi-Fi: hide or remove acts on both.
+    fun keysOf(n: JSONObject) = listOf(n.optString("key")) + (n.optJSONArray("others")?.objects()?.map { it.optString("key") } ?: emptyList())
     acting?.let { n -> StumpActions(n.optString("name").ifBlank { n.optString("address") }, onDismiss = { acting = null },
-        onHide = { Engine.fire("stump_hide", n.optString("key")); acting = null },
+        onHide = { keysOf(n).forEach { Engine.fire("stump_hide", it) }; acting = null },
         onRemove = { removing = n; acting = null }) }
     removing?.let { n -> ConfirmRemoveStump(n.optString("name").ifBlank { n.optString("address") }, onDismiss = { removing = null }) {
-        Engine.fire("stump_remove", n.optString("key")); removing = null } }
+        keysOf(n).forEach { Engine.fire("stump_remove", it) }; removing = null } }
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            Text(stringResource(R.string.stumps_intro), style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(12.dp))
+            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.stumps_intro), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                Button(stringResource(R.string.find_stumps)) { go(Route.FindStumps) }
+            }
         }
         if (nodes.isEmpty()) item { Empty(stringResource(R.string.no_stumps)) }
         items(nodes, key = { it.optString("key") }) { n ->
             val mesh = n.optString("transport") == "mesh"
+            val both = (n.optJSONArray("transports")?.length() ?: 1) > 1
             Row(Modifier.fillMaxWidth().rowPress(onClick = { go(Route.Node(n.optString("key"))) }, onLongClick = { acting = n }),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("⌂", style = MaterialTheme.typography.titleLarge.copy(color = if (n.optInt("online") == 1) Amber.Ember else Amber.Dim),
@@ -73,7 +79,8 @@ fun StumpsScreen(go: (Route) -> Unit) {
                     Text(n.optString("name").ifBlank { n.optString("address") }, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(buildList {
-                        add(if (mesh) stringResource(R.string.via_mesh) else stringResource(R.string.via_wifi))
+                        add(if (both) stringResource(R.string.via_both) else if (mesh) stringResource(R.string.via_mesh)
+                            else stringResource(R.string.via_wifi))
                         if (mesh && !n.isNull("hops")) add(stringResource(R.string.hops, n.optInt("hops")))
                         n.optString("room").takeIf { it.isNotBlank() && it != "null" }?.let { add("#$it") }
                         if (n.optString("auth") == "ok") add(stringResource(R.string.verified))

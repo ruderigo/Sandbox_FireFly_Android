@@ -33,6 +33,7 @@ sealed interface Route {
     data class Dm(val key: String, val nick: String) : Route
     data object Pair : Route
     data object Propagation : Route
+    data object FindStumps : Route
 }
 
 class MainActivity : ComponentActivity() {
@@ -120,6 +121,7 @@ fun App() {
                 is Route.Dm -> DmScreen(r.key, r.nick, back)
                 Route.Pair -> PairScreen(back)
                 Route.Propagation -> PropagationScreen(back)
+                Route.FindStumps -> FindStumpsScreen(back, go)
             }
             else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally) {

@@ -161,6 +161,7 @@ wait(lambda: v()["room"] == "lxmf", 30, "'tu es déjà dans #lxmf' corrects a st
 
 print("-- over Wi-Fi (HTTP)")
 rrc = FakeRRC(rns_verify)
+rrc.node_lxmf = node_hex            # the same Stump as the mesh one: its poll names that LXMF address
 srv = serve_http(47530, rrc)
 wkey = api.stump_connect_wifi("127.0.0.1:47530")
 check(wkey == "wifi:http://127.0.0.1:47530", f"session key {wkey}")
@@ -209,7 +210,10 @@ sess.last_command_at = time.time() - 5                 # now the note is the lat
 sess.on_http_replies(["⧗ — slow down: one voice note every 5 seconds"], None)
 check(vrow(wkey, "alice", note)["state"] == "failed", "...and fails it when the note was the last thing sent")
 print("-- hide and show again")
-keys = lambda: [n["key"] for n in json.loads(api.stump_nodes())]
+keys = lambda: [k for n in json.loads(api.stump_nodes()) for k in [n["key"]] + [o["key"] for o in n["others"]]]
+rows = [n for n in json.loads(api.stump_nodes()) if key in [n["key"]] + [o["key"] for o in n["others"]]]
+check(len(rows) == 1 and rows[0]["transports"] == ["mesh", "wifi"] and rows[0]["key"] == wkey,
+      "one entry for a Stump on LoRa and Wi-Fi (matched by LXMF address), Wi-Fi first while it answers")
 mesh_lines = len(core.store.lines(key, v()["room"]))
 wifi_lines = len(w()["lines"])
 pipe = core.sessions[wkey].pipe

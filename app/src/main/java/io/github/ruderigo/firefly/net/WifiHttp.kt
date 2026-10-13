@@ -33,22 +33,51 @@ class HttpResult(@JvmField val status: Int, @JvmField val body: ByteArray)
  */
 class WifiHttp(context: Context) {
     private val cm = context.getSystemService(ConnectivityManager::class.java)
-    @Volatile private var wifi: Network? = null
+    /** Wi-Fi networks the system has up, with their addresses (the newest last). */
+    private val networks = java.util.concurrent.ConcurrentHashMap<Network, LinkProperties>()
+    private val order = java.util.concurrent.CopyOnWriteArrayList<Network>()
+    /** A Stump hotspot joined from Find Stumps (WifiNetworkSpecifier): used first while it's up. */
+    @Volatile private var joined: Network? = null
+    private val wifi: Network? get() = joined ?: order.lastOrNull()
 
     init {
+        instance = this
         val req = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
         cm.registerNetworkCallback(req, object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(n: Network) { wifi = n }
-            override fun onLost(n: Network) {
-                if (wifi == n) { wifi = null; gateway.value = null }
+            override fun onAvailable(n: Network) {
+                order.remove(n); order.add(n)
+                cm.getLinkProperties(n)?.let { networks[n] = it }
+                publish()
             }
-            // The Stump's own address is the gateway this Wi-Fi gave us: 192.168.4.1 on a
-            // lone Stump, 192.168.5.1, 192.168.6.1… along a chain (CLIENT_QUICKSTART, Addresses).
+            override fun onLost(n: Network) {
+                order.remove(n); networks.remove(n)
+                if (joined == n) joined = null
+                publish()
+            }
             override fun onLinkPropertiesChanged(n: Network, lp: LinkProperties) {
-                gateway.value = lp.routes.firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }
-                    ?.gateway?.hostAddress
+                networks[n] = lp
+                publish()
             }
         })
+    }
+
+    /** Route Stump traffic through a hotspot joined from the app (null: back to the system's Wi-Fi). */
+    fun useJoined(n: Network?) {
+        joined = n
+        if (n != null) cm.getLinkProperties(n)?.let { networks[n] = it }
+        publish()
+    }
+
+    /**
+     * The Stump's own address is the gateway this Wi-Fi gave us: 192.168.4.1 on a lone
+     * Stump, 192.168.5.1, 192.168.6.1… along a chain (CLIENT_QUICKSTART, Addresses).
+     * The phone's own IPv4 address and prefix are what a LAN sweep covers.
+     */
+    private fun publish() {
+        val lp = wifi?.let { networks[it] ?: cm.getLinkProperties(it) }
+        gateway.value = lp?.routes?.firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }?.gateway?.hostAddress
+        local.value = lp?.linkAddresses?.firstOrNull { it.address is Inet4Address }
+            ?.let { it.address.hostAddress + "/" + it.prefixLength }
     }
 
     fun request(method: String, url: String, headersJson: String?, body: ByteArray?, timeoutMs: Int): HttpResult {
@@ -254,6 +283,9 @@ class WifiHttp(context: Context) {
     companion object {
         /** The joined Wi-Fi's IPv4 gateway (a Stump's address on its hotspot), or null off Wi-Fi. */
         val gateway = MutableStateFlow<String?>(null)
+        /** This phone's IPv4 address on that Wi-Fi, as "192.168.1.37/24". */
+        val local = MutableStateFlow<String?>(null)
+        @Volatile var instance: WifiHttp? = null
 
         /** For HTTPS: the name as percent-encoded UTF-8 (encodeURIComponent), sent with X-Filename-Encoding: url. */
         fun percentName(name: String): String {

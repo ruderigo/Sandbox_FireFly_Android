@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS stump_nodes (
     auth_detail  TEXT,
     online       INTEGER DEFAULT 0,
     last_seen    REAL,
-    active       INTEGER DEFAULT 1
+    active       INTEGER DEFAULT 1,
+    lxmf         TEXT                  -- the node's LXMF address (Wi-Fi: from the poll's node field)
 );
 CREATE TABLE IF NOT EXISTS stump_lines (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,6 +120,8 @@ class Store:
             for col, kind in (("audio_mode", "INTEGER"), ("audio", "BLOB"), ("audio_ms", "INTEGER")):
                 if col not in cols:
                     self.db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
+        if "lxmf" not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_nodes)")}:
+            self.db.execute("ALTER TABLE stump_nodes ADD COLUMN lxmf TEXT")
         self.db.commit()
         self.version = 0
 
@@ -266,7 +269,7 @@ class Store:
     # ---------------------------------------------------------------- stump nodes
     def upsert_stump_node(self, key, transport, address, **fields):
         allowed = {"name", "room", "nick", "topic", "rooms", "users", "stumps", "auth", "auth_detail",
-                   "online", "last_seen", "active"}
+                   "online", "last_seen", "active", "lxmf"}
         with self.lock:
             if not self.db.execute("SELECT 1 FROM stump_nodes WHERE key=?", (key,)).fetchone():
                 self._write("INSERT INTO stump_nodes(key, transport, address, auth) VALUES (?,?,?,'none')",
@@ -289,6 +292,12 @@ class Store:
     def stump_node(self, key):
         rows = self._read("SELECT * FROM stump_nodes WHERE key=?", (key,))
         return _decode_node(rows[0]) if rows else None
+
+    def last_signal(self, peer):
+        """RSSI/SNR of the last packet received from this peer over a radio, if any."""
+        rows = self._read("SELECT rssi, snr, ts FROM messages WHERE peer=? AND outgoing=0 AND snr IS NOT NULL"
+                          " ORDER BY ts DESC LIMIT 1", (peer,))
+        return dict(rows[0]) if rows else None
 
     def stump_nodes(self):
         rows = self._read("""
