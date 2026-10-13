@@ -62,8 +62,11 @@ over the previous one with nothing lost.
 
 `.github/workflows/release.yml` builds the same signed APK on GitHub when you
 push a version tag, and publishes it as a GitHub Release named
-`FireFly-Android-<version>.apk` (the name a Stump node looks for in its
-`tools/` folder). Give GitHub your key once, as repository secrets:
+`FireFly-Android-<version>.apk`, the name a Stump node looks for. To hand
+it out from a node, copy it to the card's `tools/firefly/` folder with a card
+reader (the Provisioner puts it there too); the node offers the newest one,
+and FireFly offers it to phones that have an older version. Give GitHub your
+key once, as repository secrets:
 
     base64 -i ~/firefly-release.jks | gh secret set FIREFLY_KEYSTORE_BASE64
     gh secret set FIREFLY_KEYSTORE_PASSWORD

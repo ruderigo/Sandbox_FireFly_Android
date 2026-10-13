@@ -244,7 +244,7 @@ FireFly shows a node's billboard and file shelf, offers its plugin commands, and
 - **Credits** are per client address on the node's network, so they follow your phone's IP there, not your identity.
 - **Plugins:** `/plugins.json` lists each plugin's commands. FireFly offers them as `!word` (the `trigger`), except stumpid's and fservbot's, which are slash only. A `!word` is an ordinary room line; the plugin answers in the room from its own nick.
 - **`⧗` names nothing.** It answers too many voice notes *or* too many plugin commands. FireFly fails a pending voice note on `⧗` only if that note was the last thing it sent, within the last minute.
-- **Updates:** `/tools.json` lists the FireFly apps on the node's card. Compare versions as the node does: split on `.`, numbers as numbers, anything else (`0-beta`) below any number, so `0.5.0-beta.1` < `0.5.0`. Download from the `url` given; it installs over an existing app only if signed with the same key.
+- **Updates:** `/tools.json` lists the FireFly apps on the node's card (in its `tools/firefly/` folder since the tool sections; `file` is still the bare name, and the `url` names the folder, so always download from the `url` as given). Compare versions as the node does: split on `.`, numbers as numbers, anything else (`0-beta`) below any number, so `0.5.0-beta.1` < `0.5.0`. Download from the `url` given; it installs over an existing app only if signed with the same key.
 
 ## Finding Stumps without joining their chat
 

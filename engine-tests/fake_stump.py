@@ -292,14 +292,24 @@ class FakeWeb:
     APK = b"PK\x03\x04 not really an apk " * 100
 
     def tools(self):
+        """/tools.json after 1.0.0-beta.2: a folder per tool, each with a README; the apps under
+        firefly/, their url naming the folder, their file the bare name (FAKE_STUMP_OLD: flat)."""
         version = os.environ.get("FAKE_STUMP_APK_VERSION", "9.9.9")
         apk = f"FireFly-Android-{version}.apk"
-        return {"sd": True,
-                "apps": [{"app": "android", "file": apk, "version": version, "size": len(self.APK),
-                          "url": "/tool?f=" + quote(apk)},
-                         {"app": "rk3326", "file": "FireFly-RK3326-0.6.2.zip", "version": "0.6.2", "size": 97653,
-                          "url": "/tool?f=FireFly-RK3326-0.6.2.zip"}],
-                "files": [{"name": "provisioner.py", "size": 156584, "url": "/tool?f=provisioner.py"}]}
+        folder = "" if os.environ.get("FAKE_STUMP_FLAT_TOOLS") == "1" else "firefly/"
+        prov = {"name": "provisioner.py", "size": 156584, "section": "" if not folder else "provisioner",
+                "url": "/tool?f=" + quote(("provisioner/" if folder else "") + "provisioner.py", safe="")}
+        out = {"sd": True,
+               "apps": [{"app": "android", "file": apk, "version": version, "size": len(self.APK),
+                         "url": "/tool?f=" + quote(folder + apk, safe="")},
+                        {"app": "rk3326", "file": "FireFly-RK3326-0.6.2.zip", "version": "0.6.2", "size": 97653,
+                         "url": "/tool?f=" + quote(folder + "FireFly-RK3326-0.6.2.zip", safe="")}],
+               "files": [prov]}
+        if folder:
+            out["sections"] = [{"dir": "provisioner", "title": "Provisioner",
+                                "summary": "The tool that sets up and updates Stump nodes",
+                                "readme": "/tool?f=provisioner%2FREADME.md", "files": [prov]}]
+        return out
 
     PLUGINS = {"api": 1, "trigger": "!",
                "plugins": [{"name": "tavern", "version": "0.1", "commands": ["8ball", "roll", "seen"],
@@ -389,7 +399,7 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0):
             if u.path == "/plugins.json" and not self._old():
                 return self._json(web.PLUGINS)
             if u.path == "/tool":
-                name = parse_qs(u.query).get("f", [""])[0]
+                name = parse_qs(u.query).get("f", [""])[0].removeprefix("firefly/")      # the apps' folder
                 if not name.startswith("FireFly-Android-"):
                     return self._text(404, "no such file")
                 self.send_response(200); self.send_header("Content-Type", "application/octet-stream")

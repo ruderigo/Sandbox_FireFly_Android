@@ -184,8 +184,14 @@ pl = stump_web.plugins(http, BASE)
 check("plugins: !commands offered, slash-only stumpid/fservbot left out",
       pl["state"] == "ok" and [c["word"] for c in pl["commands"]] == ["!8ball", "!roll", "!seen"], pl)
 t = stump_web.tools(http, BASE, "0.5.0-beta.1")
-check("tools: the node's newer Android app is offered", t["update"] and t["update"]["version"] == "9.9.9"
-      and t["update"]["url"] == BASE + "/tool?f=FireFly-Android-9.9.9.apk", t)
+check("tools: the node's newer Android app is offered, url as given (it names the firefly/ folder)",
+      t["update"] and t["update"]["version"] == "9.9.9" and t["update"]["file"] == "FireFly-Android-9.9.9.apk"
+      and t["update"]["url"] == BASE + "/tool?f=firefly%2FFireFly-Android-9.9.9.apk", t)
+os.environ["FAKE_STUMP_FLAT_TOOLS"] = "1"
+t_flat = stump_web.tools(http, BASE, "0.5.0-beta.1")
+check("tools: a beta.2 node (loose files, no sections) still works",
+      t_flat["update"]["url"] == BASE + "/tool?f=FireFly-Android-9.9.9.apk", t_flat)
+del os.environ["FAKE_STUMP_FLAT_TOOLS"]
 os.environ["FAKE_STUMP_APK_VERSION"] = "0.4.0"
 check("tools: an older one isn't", stump_web.tools(http, BASE, "0.5.0-beta.1")["update"] is None)
 os.environ["FAKE_STUMP_APK_VERSION"] = "0.5.0-beta.1"
@@ -193,7 +199,7 @@ check("tools: the same one isn't", stump_web.tools(http, BASE, "0.5.0-beta.1")["
 os.environ["FAKE_STUMP_APK_VERSION"] = "0.5.0"
 check("tools: the final release beats its beta", stump_web.tools(http, BASE, "0.5.0-beta.1")["update"]["version"] == "0.5.0")
 del os.environ["FAKE_STUMP_APK_VERSION"]
-st, data, _ = raw("GET", "/tool?f=FireFly-Android-9.9.9.apk")
+st, data, _ = raw("GET", t["update"]["url"][len(BASE):])
 check("the offered APK downloads from its url", st == 200 and data == web.APK)
 check("chain: a lone Stump says not chained", stump_web.chain(http, BASE) == {"state": "ok", "enabled": False,
       "role": None, "below": 0, "parent": None})

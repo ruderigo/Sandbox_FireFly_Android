@@ -13,6 +13,13 @@ Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android).
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
 
+### After 0.5.0-beta.4 (tests and docs)
+- Stump's Tools page now has a folder per tool, and `/tools.json` gained
+  `sections`; the FireFly apps live in `tools/firefly/` and their `url`
+  names that folder. The update offer already downloads from the `url` as
+  given, so nothing changed in the app. The test node serves the new shape
+  (and the old flat one), and the docs point to `tools/firefly/`.
+
 ### 0.5.0-beta.4: `/node.json` as the Stump team shipped it
 - Find Stumps reads `/node.json` exactly as it landed on Stump `main`
   (next release): name, LXMF address, `release` (firmware), hotspot
