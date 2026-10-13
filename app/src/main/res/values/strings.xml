@@ -267,4 +267,7 @@
     <string name="update_install">Install</string>
     <string name="update_ready">Downloaded. Tap Install; Android asks once to let FireFly install apps.</string>
     <string name="update_same_key">installs over this one only if it\'s signed with the same key</string>
+    <string name="join_wifi_gateway">This Wi-Fi\'s gateway is %1$s: that\'s the Stump you\'re next to.</string>
+    <string name="chain_root">first Stump of a chain</string>
+    <string name="chain_member">in a chain of Stumps</string>
 </resources>

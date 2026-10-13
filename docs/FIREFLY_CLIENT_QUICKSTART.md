@@ -1,6 +1,6 @@
 # FireFly client quickstart: interoperating with FireFly
 
-FireFly for Android 0.5.0-beta.1 · October 2026 (Stump 1.0.0-beta.1)
+FireFly for Android 0.5.0-beta.2 · October 2026 (Stump 1.0.0-beta.2)
 
 A client interoperates with FireFly if it speaks standard LXMF and reads and writes LXMF's audio field the way this guide describes. Nothing here is FireFly-only: it's LXMF, Reticulum, and the Stump node's own protocol.
 
@@ -235,6 +235,7 @@ valid = int.from_bytes(h.digest(), "big") <= (1 << (256 - cost))
 
 FireFly shows a node's billboard and file shelf, offers its plugin commands, and offers a newer FireFly from its card, all from the node's JSON endpoints (the Stump quickstart's reference has the formats). None of it rides the mesh. What the endpoints don't make obvious, and how FireFly handles nodes from before Stump 1.0.0-beta.1:
 
+- **The node's address is the Wi-Fi's gateway**, not always `192.168.4.1`: chained Stumps use `192.168.5.1`, `192.168.6.1`… FireFly reads the gateway from the joined network's default route (`LinkProperties`) and offers it.
 - **A 404 means the feature is off** (or the node predates it). FireFly hides that tab or offer rather than showing an error.
 - **Ask for JSON on writes.** With `Accept: application/json`, `POST /post` answers `201 {"ok": true, "id"}`, `400 title_required` or `507 storage`, and `POST /upload` answers `{"ok", "error", "name", "balance", "slot", "message"}`. Act on `error`, a stable token; `message` is for people. An older node ignores the header: `/post` answers 303 whatever happened (read `/billboard.json` back and look for a new post with your title), and `/upload` answers a plain sentence.
 - **Form fields:** UTF-8, percent-encoded, spaces as `%20` (a `+` in the text is sent as `%2B`). The title's line breaks become spaces (80 characters); the body keeps them (600).

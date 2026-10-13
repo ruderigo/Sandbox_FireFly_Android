@@ -2,6 +2,7 @@ package io.github.ruderigo.firefly.net
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
@@ -12,7 +13,9 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.Inet4Address
 import java.net.InetSocketAddress
+import kotlinx.coroutines.flow.MutableStateFlow
 import javax.net.SocketFactory
 import java.net.HttpURLConnection
 import java.net.URL
@@ -24,7 +27,7 @@ class HttpResult(@JvmField val status: Int, @JvmField val body: ByteArray)
  * HTTP for the Stump Wi-Fi pipe, bound to the Wi-Fi network.
  *
  * A Stump hotspot has no internet, so Android may keep routing traffic over
- * mobile data and 192.168.4.1 becomes unreachable. Opening the connection
+ * mobile data and the node (192.168.4.1, or 192.168.n.1 in a chain) becomes unreachable. Opening the connection
  * through the Wi-Fi [Network] itself avoids that without binding the whole
  * process (which would also move Reticulum's TCP peers off mobile data).
  */
@@ -36,7 +39,15 @@ class WifiHttp(context: Context) {
         val req = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
         cm.registerNetworkCallback(req, object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(n: Network) { wifi = n }
-            override fun onLost(n: Network) { if (wifi == n) wifi = null }
+            override fun onLost(n: Network) {
+                if (wifi == n) { wifi = null; gateway.value = null }
+            }
+            // The Stump's own address is the gateway this Wi-Fi gave us: 192.168.4.1 on a
+            // lone Stump, 192.168.5.1, 192.168.6.1… along a chain (CLIENT_QUICKSTART, Addresses).
+            override fun onLinkPropertiesChanged(n: Network, lp: LinkProperties) {
+                gateway.value = lp.routes.firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }
+                    ?.gateway?.hostAddress
+            }
         })
     }
 
@@ -241,6 +252,9 @@ class WifiHttp(context: Context) {
     }
 
     companion object {
+        /** The joined Wi-Fi's IPv4 gateway (a Stump's address on its hotspot), or null off Wi-Fi. */
+        val gateway = MutableStateFlow<String?>(null)
+
         /** For HTTPS: the name as percent-encoded UTF-8 (encodeURIComponent), sent with X-Filename-Encoding: url. */
         fun percentName(name: String): String {
             val sb = StringBuilder()

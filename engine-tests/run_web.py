@@ -195,7 +195,25 @@ check("tools: the final release beats its beta", stump_web.tools(http, BASE, "0.
 del os.environ["FAKE_STUMP_APK_VERSION"]
 st, data, _ = raw("GET", "/tool?f=FireFly-Android-9.9.9.apk")
 check("the offered APK downloads from its url", st == 200 and data == web.APK)
+check("chain: a lone Stump says not chained", stump_web.chain(http, BASE) == {"state": "ok", "enabled": False,
+      "role": None, "below": 0, "parent": None})
+os.environ["FAKE_STUMP_CHAIN"] = "member"
+c = stump_web.chain(http, BASE)
+check("chain: a member, its parent and how many below", c["enabled"] and c["role"] == "member"
+      and c["parent"] == "192.168.4.1" and c["below"] == 1, c)
+del os.environ["FAKE_STUMP_CHAIN"]
+
+# stump.node beacons may gain fields (beta.2): read the first four, ignore the rest.
+import RNS.vendor.umsgpack as msgpack
+from firefly.stump import parse_beacon
+h = bytes(range(16))
+check("beacon with 4 fields", parse_beacon(msgpack.packb(["stump", "Beta A", "LaBuche", h])) == (h.hex(), "LaBuche", "Beta A"))
+check("beacon with a 5th field: same answer", parse_beacon(msgpack.packb(["stump", "Beta A", "LaBuche", h, {"chain": 2}]))
+      == (h.hex(), "LaBuche", "Beta A"))
+check("not a beacon", parse_beacon(msgpack.packb(["other", "x", "y", h])) is None)
+
 os.environ["FAKE_STUMP_OLD"] = "1"
+check("older node: no chain.json -> off", stump_web.chain(http, BASE)["state"] == "off")
 check("older node: no plugins.json -> off", stump_web.plugins(http, BASE)["state"] == "off")
 check("older node: no tools.json -> off", stump_web.tools(http, BASE, "0.4.0")["state"] == "off")
 del os.environ["FAKE_STUMP_OLD"]

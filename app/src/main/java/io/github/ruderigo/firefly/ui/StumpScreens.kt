@@ -30,6 +30,7 @@ import io.github.ruderigo.firefly.audio.VoiceEncoder
 import io.github.ruderigo.firefly.audio.Opus
 import io.github.ruderigo.firefly.audio.Codec2
 import io.github.ruderigo.firefly.engine.Engine
+import io.github.ruderigo.firefly.net.WifiHttp
 import io.github.ruderigo.firefly.engine.EngineService
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationManagerCompat
@@ -42,7 +43,12 @@ import org.json.JSONObject
 fun StumpsScreen(go: (Route) -> Unit) {
     val nodes = engineData(emptyList<JSONObject>()) { Engine.arr("stump_nodes").objects() }
     val settings = engineData(JSONObject()) { Engine.obj("settings_get") }
-    var url by remember(settings) { mutableStateOf(settings.optString("stump_wifi_default", "http://192.168.4.1")) }
+    // The Stump you're standing next to is the gateway of the Wi-Fi you joined (192.168.n.1 along
+    // a chain); the saved default is only for when the phone isn't on Wi-Fi.
+    val gateway by WifiHttp.gateway.collectAsState()
+    var url by remember(settings, gateway) {
+        mutableStateOf(gateway?.let { "http://$it" } ?: settings.optString("stump_wifi_default", "http://192.168.4.1"))
+    }
     val hidden = engineData(0) { Engine.call("stump_hidden_count").toIntOrNull() ?: 0 }
     var acting by remember { mutableStateOf<JSONObject?>(null) }
     var removing by remember { mutableStateOf<JSONObject?>(null) }
@@ -86,6 +92,10 @@ fun StumpsScreen(go: (Route) -> Unit) {
         item {
             Section(stringResource(R.string.join_wifi)) {
                 Text(stringResource(R.string.join_wifi_help), style = MaterialTheme.typography.bodySmall)
+                gateway?.let {
+                    Text(stringResource(R.string.join_wifi_gateway, it), style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 4.dp))
+                }
                 Spacer(Modifier.height(8.dp))
                 Field(url, { url = it }, Modifier.fillMaxWidth(), mono = true)
                 Spacer(Modifier.height(8.dp))
@@ -109,6 +119,7 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
     var shelf by remember(key) { mutableStateOf<JSONObject?>(null) }
     var plugins by remember(key) { mutableStateOf<JSONObject?>(null) }     // its !commands
     var tools by remember(key) { mutableStateOf<JSONObject?>(null) }       // a newer FireFly on its card
+    var chain by remember(key) { mutableStateOf<JSONObject?>(null) }       // its place in a chain of Stumps
     val version = myVersion(LocalContext.current)
     LaunchedEffect(key) {
         if (!mesh) {
@@ -116,6 +127,7 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
             shelf = Engine.obj("stump_files", key)
             plugins = Engine.obj("stump_plugins", key)
             tools = Engine.obj("stump_tools", key, version)
+            chain = Engine.obj("stump_chain", key)
         }
     }
     val auth = view.optString("auth", "none")
@@ -127,6 +139,9 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
                 if (mesh) stringResource(R.string.via_mesh) else stringResource(R.string.via_wifi),
                 view.optString("nick").takeIf { it.isNotBlank() && it != "null" }?.let { stringResource(R.string.you_are, it) },
                 if (view.optInt("online") == 0) stringResource(R.string.unreachable) else null,
+                chain?.takeIf { it.optBoolean("enabled") }?.let {
+                    stringResource(if (it.optString("role") == "root") R.string.chain_root else R.string.chain_member)
+                },
             ).joinToString("  "), back) {
             var menuRemove by remember { mutableStateOf(false) }
             if (menuRemove) ConfirmRemoveStump(view.optString("name").ifBlank { key.substringAfter(":") },

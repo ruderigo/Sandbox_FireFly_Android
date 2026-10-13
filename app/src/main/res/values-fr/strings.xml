@@ -267,4 +267,7 @@
     <string name="update_install">Installer</string>
     <string name="update_ready">Téléchargé. Touchez Installer ; Android demande une fois d\'autoriser FireFly à installer des applis.</string>
     <string name="update_same_key">s\'installe par-dessus celle-ci seulement si elle est signée avec la même clé</string>
+    <string name="join_wifi_gateway">La passerelle de ce Wi-Fi est %1$s : c\'est le Stump à côté de vous.</string>
+    <string name="chain_root">premier Stump d\'une chaîne</string>
+    <string name="chain_member">dans une chaîne de Stumps</string>
 </resources>

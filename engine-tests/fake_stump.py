@@ -366,6 +366,14 @@ def serve_http(port, rrc, web=None):
                 return self._json(web.shelf())
             if u.path == "/tools.json" and not self._old():
                 return self._json(web.tools())
+            if u.path == "/chain.json" and not self._old():
+                role = os.environ.get("FAKE_STUMP_CHAIN", "")       # "", "root" or "member"
+                if not role:
+                    return self._json({"enabled": False})
+                return self._json({"enabled": True, "role": role, "ap_ip": "192.168.5.1", "channel": 6, "secret": True,
+                                   "uplink": None if role == "root" else
+                                   {"ssid": "Stump-A", "ip": "192.168.4.23", "parent": "192.168.4.1", "parent_heard_s": 3},
+                                   "below": ["192.168.6.1"]})
             if u.path == "/plugins.json" and not self._old():
                 return self._json(web.PLUGINS)
             if u.path == "/tool":

@@ -230,3 +230,21 @@ def tools(http, base, my_version):
                           "size": a.get("size") if isinstance(a.get("size"), int) else None,
                           "url": url if "://" in url else base + "/" + url.lstrip("/")}
     return {"state": "ok", "update": update}
+
+
+# ------------------------------------------------------------------ chained Stumps
+def chain(http, base):
+    """GET /chain.json (Stump 1.0.0-beta.2): this Stump's place in a chain over Wi-Fi.
+    -> {"state", "enabled", "role": "root" | "member" | None, "below": n, "parent": ip | None}
+    Read defensively: the client spec names the endpoint but not its fields; these
+    are chain.status()'s."""
+    data = _get_json(http, base + "/chain.json")
+    if data["state"] != "ok":
+        return data
+    if not data.get("enabled"):
+        return {"state": "ok", "enabled": False, "role": None, "below": 0, "parent": None}
+    up = data.get("uplink") if isinstance(data.get("uplink"), dict) else {}
+    below = data.get("below") if isinstance(data.get("below"), list) else []
+    role = data.get("role") if data.get("role") in ("root", "member") else None
+    return {"state": "ok", "enabled": True, "role": role, "below": len(below),
+            "parent": up.get("parent") if isinstance(up.get("parent"), str) else None}
