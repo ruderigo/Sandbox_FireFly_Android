@@ -29,7 +29,8 @@ from . import stump
 
 MESH, WIFI = "mesh", "wifi"
 POLL_BASE_S, POLL_MAX_S, POLL_JITTER = 2.0, 30.0, 0.30
-MESH_LANDING_ROOM = "lxmf"
+MESH_LANDING_ROOM = "lora-mesh"     # was #lxmf before Stump 1.0.0-beta.4; learned from the node's → #room
+SLOW_WINDOW_S = 60                  # a ⧗ answers something we sent within this
 MOVE_WINDOW_S = 60        # a move's own "✓ me" arrives within this; our lines sent this recently can be re-filed
 JOIN_WINDOW_S = 120       # how long a reply can still be the answer to our /join
 DM_COMMANDS = ("/msg ", "/m ", "/w ")
@@ -247,8 +248,9 @@ class StumpSession:
         self.key = f"{pipe.kind}:{pipe.address}"
         self.lock = threading.RLock()
         node = self.store.stump_node(self.key) or {}
-        # Where mesh users land by default is #lxmf; walk-up Wi-Fi visitors share #main.
-        self.room = node.get("room") or ("lxmf" if pipe.kind == MESH else "main")
+        # Where mesh users land by default is #lora-mesh (#lxmf on older nodes); walk-up Wi-Fi
+        # visitors share #main. The node's own replies correct this either way.
+        self.room = node.get("room") or (MESH_LANDING_ROOM if pipe.kind == MESH else "main")
         self.nick = node.get("nick")
         self.auth = None
         self.landing = MESH_LANDING_ROOM if pipe.kind == MESH else "main"
@@ -260,6 +262,8 @@ class StumpSession:
         self.seen_remote = set()            # HTTP message ids already stored (dedupe)
         self.closed = False                 # set by stop(): late results are dropped
         self.last_command_at = 0.0          # our last /command or !plugin line (⧗ can answer either)
+        self.last_sent = None               # the last thing we sent: {"kind", "id", "text", "at"} (what a ⧗ refused)
+        self._reply_to = None               # the line an HTTP reply answers, while it's handled
         self._save(name=name or node.get("name") or pipe.address, room=self.room, active=1,
                    last_seen=time.time())
         pipe.start(self)
@@ -297,11 +301,16 @@ class StumpSession:
         self._note_join(text)
         if text.startswith(("/", "!")):
             self.last_command_at = time.time()
+            self.last_sent = {"kind": "command", "id": None, "text": text, "at": time.time()}
+        else:
+            self.last_sent = {"kind": "line", "id": None, "text": text, "at": time.time(), "room": self.room}
         msg_id = self.pipe.send(text)
         if self.pipe.kind == MESH and not text.startswith("/"):
             # Over LXMF your own room lines are never echoed back: draw it now,
             # with the LXMF delivery state of the message that carries it.
-            self.store.add_line(self.key, self.room, "msg", text, nick=self.my_nick(), mine=True, msg_id=msg_id)
+            line_id = self.store.add_line(self.key, self.room, "msg", text, nick=self.my_nick(), mine=True, msg_id=msg_id)
+            if self.last_sent["kind"] == "line":
+                self.last_sent["id"] = line_id
         elif text.startswith("/"):
             self.store.add_line(self.key, self.room, "command", text, nick=self.my_nick(), mine=True,
                                 msg_id=msg_id)
@@ -323,6 +332,14 @@ class StumpSession:
         room = room.lstrip("#")
         if room == self.room:
             return
+        if self.room and stump.same_room(room, self.room):
+            # The same room under its new name (#lxmf -> #lora-mesh): its history follows.
+            self.store.rename_room(self.key, self.room, room)
+            if stump.same_room(self.landing, room):
+                self.landing = room
+            self.room = room
+            self._save(room=room)
+            return
         old, self.room = self.room, room
         self._save(room=room)
         if old:
@@ -340,6 +357,7 @@ class StumpSession:
         if not nick or not text:
             return None
         dm_id = self.store.add_dm(self.key, nick, True, text, "pending")
+        self.last_sent = {"kind": "dm", "id": dm_id, "text": text, "at": time.time()}
         msg_id = self.pipe.send(f"/msg {nick} {text}")
         if msg_id:
             self.store.update_dm(dm_id, msg_id=msg_id)
@@ -356,6 +374,7 @@ class StumpSession:
         # The node refuses a voice note with a sentence, not a token: remember when we
         # sent, so such a sentence can fail this note with its words.
         self.voice_sent_at[dm_id] = time.time()
+        self.last_sent = {"kind": "voice", "id": dm_id, "text": None, "at": time.time()}
         msg_id = self.pipe.send_voice(nick, mode, data)
         if msg_id:
             self.store.update_dm(dm_id, msg_id=msg_id)
@@ -468,11 +487,15 @@ class StumpSession:
             self.room = room
             self._save(room=room)
             self.store.add_line(self.key, room, "system", f"→ #{room}")
-        for r in replies:
-            for parsed in stump.parse_message(str(r)):
-                if parsed["kind"] == "moved" and room:
-                    continue            # already drawn from the structured `room` field
-                self._handle(parsed)
+        self._reply_to = sent           # over HTTP a reply names the line it answers (a ⧗ refused that one)
+        try:
+            for r in replies:
+                for parsed in stump.parse_message(str(r)):
+                    if parsed["kind"] == "moved" and room:
+                        continue            # already drawn from the structured `room` field
+                    self._handle(parsed)
+        finally:
+            self._reply_to = None
         if hasattr(self.pipe, "poke"):
             self.pipe.poke()
 
@@ -504,15 +527,10 @@ class StumpSession:
         if k == "unknown_command":
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "slow":
-            # ⧗ is the node saying "slow down" to voice notes, and since plugins, to commands
-            # too. It names neither: it answers whichever we sent last.
-            note = self._slowed_voice_note()
-            if note:
-                self.voice_sent_at.pop(note["id"], None)
-                self.store.update_dm(note["id"], state="failed",
-                                     reason="too many voice notes too fast; wait a little and send again")
-                return
-            return self.store.add_line(self.key, self.room, "reply", p.get("text", ""))
+            # ⧗ is the node saying "slow down": lines too fast (3 at once, then one every 2 s),
+            # too many voice notes, plugin commands or wrong passwords. It names nothing: it
+            # refused the last thing we sent, which wasn't sent (offer to resend).
+            return self._slowed(p.get("text", ""))
         if k == "no_such_nick":
             nick = p["nick"].lstrip("~")
             for dm in self.store.pending_dms(self.key):
@@ -523,6 +541,10 @@ class StumpSession:
         if k == "moved":
             self.last_move_at = time.time()
             self.move_join_pending = True
+            if not (self.join_target and time.time() - self.join_at < JOIN_WINDOW_S) and self.pipe.kind == MESH:
+                # Not a /join of ours: the node landed us. That's the landing room, by its real
+                # name on this node (#lora-mesh, #lxmf on older ones, #wifi-mesh over a chain).
+                self.landing = p["room"].lstrip("#")
             self.join_target = None
             self._set_room(p["room"])
             return self.store.add_line(self.key, self.room, "system", f"→ #{self.room}")
@@ -585,6 +607,53 @@ class StumpSession:
     # notice) leaves pending notes alone. (The "/msg <who>" hint can't apply: FireFly
     # always sends /msg <nick> with its notes.)
     VOICE_REFUSAL_MARKERS = ("Opus", "Codec", "0.6", "0,6")
+
+    def _slowed(self, text):
+        sent = getattr(self, "_reply_to", None)
+        if sent is not None:                                    # Wi-Fi: we know exactly what was refused
+            return self._refused(sent, text)
+        last, self.last_sent = self.last_sent, None
+        if not last or time.time() - last["at"] > SLOW_WINDOW_S:
+            return self.store.add_line(self.key, self.room, "reply", text)
+        if last["kind"] == "voice":
+            self.voice_sent_at.pop(last["id"], None)
+            self.store.update_dm(last["id"], state="failed",
+                                 reason="too many voice notes too fast; wait a little and send again")
+            return None
+        if last["kind"] == "dm":
+            self.store.update_dm(last["id"], state="failed", reason="sent too fast; wait a moment and send it again")
+            return None
+        if last["kind"] == "line":
+            if last["id"]:                                      # over LoRa: already drawn, mark it
+                self.store.set_line_state(last["id"], "failed")
+            else:                                               # over Wi-Fi: it never arrives; draw it as not sent
+                line_id = self.store.add_line(self.key, last.get("room") or self.room, "msg", last["text"],
+                                              nick=self.my_nick(), mine=True)
+                self.store.set_line_state(line_id, "failed")
+            return None
+        return self.store.add_line(self.key, self.room, "reply", text)      # a command: show the node's line
+
+    def _refused(self, sent, text):
+        """The node refused this exact line with ⧗: it wasn't sent."""
+        if sent.lower().startswith(DM_COMMANDS):
+            parts = sent.split(" ", 2)
+            nick = parts[1].lstrip("~") if len(parts) > 1 else ""
+            body = parts[2] if len(parts) > 2 else ""
+            for dm in reversed(self.store.pending_dms(self.key)):
+                if dm["nick"].lower() == nick.lower() and dm["body"] == body:
+                    voice = dm.get("audio_mode") is not None
+                    if voice:
+                        self.voice_sent_at.pop(dm["id"], None)
+                    self.store.update_dm(dm["id"], state="failed", reason=(
+                        "too many voice notes too fast; wait a little and send again" if voice
+                        else "sent too fast; wait a moment and send it again"))
+                    return None
+            return self.store.add_line(self.key, self.room, "reply", text)
+        if sent.startswith(("/", "!")):
+            return self.store.add_line(self.key, self.room, "reply", text)          # a command: the node's line
+        line_id = self.store.add_line(self.key, self.room, "msg", sent, nick=self.my_nick(), mine=True)
+        self.store.set_line_state(line_id, "failed")
+        return None
 
     def _slowed_voice_note(self):
         """The pending voice note a ⧗ stopped: our most recent one, if it went out in the

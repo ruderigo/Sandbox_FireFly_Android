@@ -59,19 +59,23 @@ fun ColumnScope.BoardPane(key: String, board: JSONObject?, onBoard: (JSONObject)
         "unreachable" to stringResource(R.string.web_unreachable),
         "off" to stringResource(R.string.board_off),
         "storage" to stringResource(R.string.board_storage),
+        "rate_limited" to stringResource(R.string.board_rate_limited),
     )
     val postedText = stringResource(R.string.board_posted)
     val errorText = stringResource(R.string.web_error_generic)
 
+    var query by remember(key) { mutableStateOf("") }
+
     fun refresh() {
         loading = true
-        scope.launch { onBoard(Engine.obj("stump_board", key)); loading = false }
+        scope.launch { onBoard(Engine.obj("stump_board", key, query.trim())); loading = false }
     }
 
     LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 8.dp)) {
         item {
             WebHeader(stringResource(R.string.board_intro), loading) { refresh() }
         }
+        item { SearchRow(query, { query = it }, stringResource(R.string.board_search_hint)) { refresh() } }
         when (board.webState()) {
             "" -> item { Empty(stringResource(R.string.web_loading)) }
             "unreachable", "error" -> item { WebProblem(board!!) { refresh() } }
@@ -154,9 +158,12 @@ fun ColumnScope.FilesPane(key: String, shelf: JSONObject?, onShelf: (JSONObject)
     val credits = shelf?.optBoolean("credits") ?: false
     val busy = transfer?.state == FileTransfers.State.RUNNING       // one transfer at a time
 
+    var query by remember(key) { mutableStateOf("") }
+    var cat by remember(key) { mutableStateOf("") }
+
     fun refresh() {
         loading = true
-        scope.launch { onShelf(Engine.obj("stump_files", key)); loading = false }
+        scope.launch { onShelf(Engine.obj("stump_files", key, query.trim(), cat)); loading = false }
     }
     // A finished upload changes the shelf (and maybe evicted old files): read it again.
     LaunchedEffect(transfer?.state, transfer?.kind) {
@@ -199,6 +206,21 @@ fun ColumnScope.FilesPane(key: String, shelf: JSONObject?, onShelf: (JSONObject)
         item {
             WebHeader(stringResource(if (credits) R.string.files_intro else R.string.files_intro_free), loading) { refresh() }
         }
+        item { Column {
+            SearchRow(query, { query = it }, stringResource(R.string.files_search_hint)) { refresh() }
+            // The node's kinds of file (cat): a tap filters, a second tap shows everything again.
+            val cats = listOf("video" to R.string.cat_video, "music" to R.string.cat_music, "document" to R.string.cat_document,
+                "image" to R.string.cat_image, "other" to R.string.cat_other)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp)) {
+                cats.forEach { (c, label) ->
+                    Text(classGlyph(c) + " " + stringResource(label), modifier = Modifier.padding(end = 6.dp).clip(Small)
+                        .border(1.dp, if (cat == c) Amber.Ember else Amber.Border, Small)
+                        .clickable { cat = if (cat == c) "" else c; refresh() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium.copy(color = if (cat == c) Amber.Ember else Amber.Muted))
+                }
+            }
+        } }
         when (shelf.webState()) {
             "" -> item { Empty(stringResource(R.string.web_loading)) }
             "unreachable", "error" -> item { WebProblem(shelf!!) { refresh() } }
@@ -222,14 +244,26 @@ fun ColumnScope.FilesPane(key: String, shelf: JSONObject?, onShelf: (JSONObject)
     }
 }
 
-private fun classGlyph(c: String) = when (c) { "video" -> "▶"; "music" -> "♫"; "document" -> "¶"; else -> "◇" }
+private fun classGlyph(c: String) = when (c) { "video" -> "▶"; "music" -> "♫"; "document" -> "¶"; "image" -> "▣"; else -> "◇" }
+
+/** A search box: Done (or the ⌕) asks the node again with these words. */
+@Composable
+private fun SearchRow(value: String, onChange: (String) -> Unit, hint: String, onSearch: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Field(value, onChange, Modifier.weight(1f), hint = hint, onDone = onSearch)
+        Text("⌕", modifier = Modifier.padding(start = 6.dp).clip(Small).clickable(onClick = onSearch).padding(8.dp),
+            style = MaterialTheme.typography.titleLarge.copy(color = Amber.Ember))
+        if (value.isNotEmpty()) Text("✕", modifier = Modifier.clip(Small).clickable { onChange(""); onSearch() }.padding(8.dp),
+            style = MaterialTheme.typography.labelLarge.copy(color = Amber.Muted))
+    }
+}
 
 @Composable
 private fun FileRow(f: JSONObject, credits: Boolean, enabled: Boolean, onSave: () -> Unit) {
     val ctx = LocalContext.current
     Row(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onSave).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Text(classGlyph(f.optString("class")), style = MaterialTheme.typography.titleLarge.copy(color = Amber.Ember),
+        Text(classGlyph(f.optString("cat").ifBlank { f.optString("class") }), style = MaterialTheme.typography.titleLarge.copy(color = Amber.Ember),
             modifier = Modifier.width(32.dp))
         Column(Modifier.weight(1f)) {
             Text(f.optString("name"), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)

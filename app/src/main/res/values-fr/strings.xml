@@ -308,4 +308,14 @@
     <string name="find_steady_detail">%1$d ms · %2$d/%3$d perdus</string>
     <string name="via_both">LoRa + Wi-Fi</string>
     <string name="find_chat_off">le chat est désactivé sur ce nœud</string>
+    <string name="line_not_sent">non envoyé (trop vite) : touchez pour renvoyer</string>
+    <string name="tap_to_resend">Touchez pour renvoyer.</string>
+    <string name="board_rate_limited">Vous avez publié plusieurs fois en une minute : le nœud vous demande d\'attendre un peu.</string>
+    <string name="board_search_hint">Chercher sur le panneau</string>
+    <string name="files_search_hint">Chercher par nom</string>
+    <string name="cat_video">vidéo</string>
+    <string name="cat_music">musique</string>
+    <string name="cat_document">documents</string>
+    <string name="cat_image">images</string>
+    <string name="cat_other">autres</string>
 </resources>

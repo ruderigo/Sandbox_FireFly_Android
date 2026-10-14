@@ -229,7 +229,13 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
     LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(8.dp)) {
         if (lines.isEmpty()) item { Empty(stringResource(if (mesh) R.string.room_empty_mesh else R.string.room_empty)) }
-        items(lines, key = { it.optLong("id") }) { RoomLine(it) }
+        items(lines, key = { it.optLong("id") }) { l ->
+            // A line the node refused (⧗: too fast) wasn't sent: a tap sends it again.
+            val failed = l.optInt("mine") == 1 && l.optString("state") == "failed"
+            Box(if (failed) Modifier.clickable { Engine.fire("stump_post", key, l.optString("body")) } else Modifier) {
+                RoomLine(l)
+            }
+        }
     }
     PluginChips(plugins) { word -> if (!draft.value.startsWith(word.trim())) draft.value = word }
     Composer(stringResource(R.string.room_hint, here), counter = { if (mesh) PacketCounter(it) }, draft = draft) {
@@ -240,6 +246,7 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
 /** One RRC line, coloured by meaning like the node's own web chat. */
 @Composable
 private fun RoomLine(l: JSONObject) {
+    val notSent = stringResource(R.string.line_not_sent)
     val kind = l.optString("kind")
     val nick = l.optString("nick").takeIf { it.isNotBlank() && it != "null" }
     val body = l.optString("body")
@@ -258,6 +265,9 @@ private fun RoomLine(l: JSONObject) {
             withStyle(SpanStyle(color = if (l.optString("state") == "failed") Amber.Error else Amber.Dim)) {
                 append("  " + stateGlyph(l.optString("state")))
             }
+            if (l.optString("state") == "failed") withStyle(SpanStyle(color = Amber.Error)) {
+                append("  " + notSent)
+            }
         }
     }
     SelectionContainer { Text(text, style = mono, modifier = Modifier.padding(vertical = 2.dp)) }
@@ -268,8 +278,10 @@ private fun ColumnScope.PrivatePane(key: String, view: JSONObject, threads: List
     val talking = threads.map { it.optString("nick") }.toSet()
     val me = view.optString("nick")
     val stumps = view.optJSONArray("stumps")?.strings()?.toSet() ?: emptySet()
+    // People first, then the Stumps (🪵, as the node's web chat groups them). On a chain,
+    // people on other Stumps are listed as nick@thatstump and reached the same way.
     val others = (view.optJSONArray("users")?.strings() ?: emptyList()).map { it.removePrefix("~") }
-        .filter { it != me && it !in talking }
+        .filter { it != me && it !in talking }.sortedBy { it in stumps }
     var to by remember { mutableStateOf("") }
     LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
         item { Text(stringResource(R.string.direct_messages), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(12.dp)) }
@@ -295,7 +307,8 @@ private fun ColumnScope.PrivatePane(key: String, view: JSONObject, threads: List
         }
         items(others, key = { "u$it" }) { nick ->
             Row(Modifier.fillMaxWidth().rowClick { go(Route.Dm(key, nick)) }) {
-                Text(nick, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text((if (nick in stumps) "🪵 " else "") + nick, style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f))
                 if (nick in stumps) Text("stump", style = MaterialTheme.typography.labelSmall)
             }
         }
@@ -329,14 +342,18 @@ fun DmScreen(key: String, nick: String, back: () -> Unit) {
                     horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                     if (!m.isNull("audio_mode")) VoiceBubble(m, mine, fetch = "stump_dm_audio", dm = true)
                     else Box(Modifier.widthIn(max = 320.dp).clip(Large).background(Amber.Panel)
-                        .border(1.dp, Amber.DmBody.copy(alpha = if (mine) 0.5f else 0.25f), Large).padding(10.dp)) {
+                        .border(1.dp, Amber.DmBody.copy(alpha = if (mine) 0.5f else 0.25f), Large)
+                        .clickable(enabled = mine && m.optString("state") == "failed") {
+                            Engine.fire("stump_send_dm", key, nick, m.optString("body"))      // send it again
+                        }.padding(10.dp)) {
                         SelectionContainer { Text(m.optString("body"), style = MaterialTheme.typography.bodyLarge.copy(color = Amber.DmBody)) }
                     }
                     val state = m.optString("state")
                     val meta = clock(m.optDouble("ts")) + if (mine) "  " + when (state) {
                         "pending" -> stringResource(R.string.dm_pending)
                         "delivered" -> stringResource(R.string.dm_delivered)
-                        "failed" -> stringResource(R.string.dm_failed, m.optString("reason"))
+                        "failed" -> stringResource(R.string.dm_failed, m.optString("reason")) +
+                            (if (m.isNull("audio_mode")) "  " + stringResource(R.string.tap_to_resend) else "")
                         else -> ""
                     } else ""
                     Text(meta, style = MaterialTheme.typography.labelSmall.copy(color = if (state == "failed") Amber.Error else Amber.Dim))

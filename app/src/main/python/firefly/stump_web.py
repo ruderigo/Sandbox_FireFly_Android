@@ -83,8 +83,21 @@ def _post_time(pid):
     return t if t > 1_600_000_000 else None
 
 
-def board(http, base, now=None):
-    data = _get_json(http, base + "/billboard.json")
+def _fold(t):
+    """Lowercase without accents: 'velo' finds 'Vélo', as the node searches."""
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", (t or "").lower()) if unicodedata.category(c) != "Mn")
+
+
+def _query(**params):
+    q = {k: v for k, v in params.items() if v}
+    return ("?" + urllib.parse.urlencode(q, quote_via=urllib.parse.quote)) if q else ""
+
+
+def board(http, base, now=None, q="", sort=""):
+    """?q= (title or body holds one of the words) and ?sort=newest|oldest|title on current nodes;
+    an older node ignores them, so the words are also applied here."""
+    data = _get_json(http, base + "/billboard.json" + _query(q=q, sort=sort))
     if data["state"] != "ok":
         return data
     now = now or time.time()
@@ -96,6 +109,9 @@ def board(http, base, now=None):
         posts.append({"id": p.get("id"), "title": str(p.get("title")), "body": str(p.get("body") or ""),
                       "sig": str(p.get("sig") or ""), "posted": t,
                       "expires_in": max(0, int(t + POST_LIFETIME_S - now)) if t else None})
+    words = _fold(q).split()
+    if words:
+        posts = [p for p in posts if any(w in _fold(p["title"] + " " + p["body"]) for w in words)]
     return {"state": "ok", "posts": posts}
 
 
@@ -124,8 +140,10 @@ def board_post(http, base, title, body=""):
     if "ok" in data:                                    # a node that answers as data
         if data["ok"]:
             return {"ok": True, "id": data.get("id"), "board": after}
-        reason = {"title_required": "empty", "storage": "storage"}.get(data.get("error"), "error")
+        reason = {"title_required": "empty", "storage": "storage", "rate_limited": "rate_limited"}.get(data.get("error"), "error")
         return {"ok": False, "reason": reason, "message": data.get("message"), "board": after}
+    if status == 429:                                   # 3 posts a minute per visitor
+        return {"ok": False, "reason": "rate_limited", "board": after}
     if status not in (200, 201, 302, 303):
         return {"ok": False, "reason": "error", "status": status, "board": after}
     seen = {(p["id"], p["title"]) for p in before.get("posts", [])}
@@ -147,8 +165,10 @@ def _json_answer(send):
 
 
 # ------------------------------------------------------------------ files
-def files(http, base):
-    data = _get_json(http, base + "/files.json")
+def files(http, base, q="", cat="", sort=""):
+    """?q= (in the name), ?cat=video|music|document|image|other, ?sort=newest|oldest|name|small|large
+    on current nodes (rows carry cat and mtime); applied here too for older ones."""
+    data = _get_json(http, base + "/files.json" + _query(q=q, cat=cat, sort=sort))
     if data["state"] != "ok":
         return data
     out = []
@@ -158,7 +178,14 @@ def files(http, base):
         size = f.get("size")
         out.append({"name": str(f["name"]), "size": size if isinstance(size, int) else None,
                     "class": f.get("class") or file_class(str(f["name"])),
+                    "cat": f.get("cat") or f.get("class") or file_class(str(f["name"])),
+                    "mtime": f.get("mtime") if isinstance(f.get("mtime"), (int, float)) else None,
                     "cost": int(f.get("cost") or 0)})
+    words = _fold(q).split()
+    if words:
+        out = [f for f in out if any(w in _fold(f["name"]) for w in words)]
+    if cat:
+        out = [f for f in out if f["cat"] == cat]
     return {"state": "ok", "sd": bool(data.get("sd", True)), "credits": bool(data.get("credits", False)),
             "files": out}
 

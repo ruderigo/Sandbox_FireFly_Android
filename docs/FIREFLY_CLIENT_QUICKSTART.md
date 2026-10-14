@@ -1,6 +1,6 @@
 # FireFly client quickstart: interoperating with FireFly
 
-FireFly for Android 0.5.0-beta.4 · October 2026 (Stump 1.0.0-beta.2)
+FireFly for Android 0.5.0-beta.5 · October 2026 (Stump 1.0.0-beta.4) (Stump 1.0.0-beta.2)
 
 A client interoperates with FireFly if it speaks standard LXMF and reads and writes LXMF's audio field the way this guide describes. Nothing here is FireFly-only: it's LXMF, Reticulum, and the Stump node's own protocol.
 
@@ -243,7 +243,8 @@ FireFly shows a node's billboard and file shelf, offers its plugin commands, and
 - **Downloads:** `/download?f=` with the name percent-encoded as UTF-8. Stream the body to storage; files can be large.
 - **Credits** are per client address on the node's network, so they follow your phone's IP there, not your identity.
 - **Plugins:** `/plugins.json` lists each plugin's commands. FireFly offers them as `!word` (the `trigger`), except stumpid's and fservbot's, which are slash only. A `!word` is an ordinary room line; the plugin answers in the room from its own nick.
-- **`⧗` names nothing.** It answers too many voice notes *or* too many plugin commands. FireFly fails a pending voice note on `⧗` only if that note was the last thing it sent, within the last minute.
+- **`⧗` names nothing.** It answers lines too fast (3 at once, then one every 2 s), too many voice notes, plugin commands or wrong passwords, and what it answers wasn't sent. Over HTTP the reply to `POST /rrc/send` belongs to the line you sent, so FireFly marks exactly that line or DM *not sent* (tap to resend); over LXMF it marks the last thing it sent within a minute.
+- **Room names:** `#lxmf` became `#lora-mesh` in Stump 1.0.0-beta.4 (the node still accepts `lxmf` and `lora`). Keep the name the node replies with and compare rooms through the aliases; don't rename `#lxmf` yourself, since on an older node that's still the real room.
 - **Updates:** `/tools.json` lists the FireFly apps on the node's card (in its `tools/firefly/` folder since the tool sections; `file` is still the bare name, and the `url` names the folder, so always download from the `url` as given). Compare versions as the node does: split on `.`, numbers as numbers, anything else (`0-beta`) below any number, so `0.5.0-beta.1` < `0.5.0`. Download from the `url` given; it installs over an existing app only if signed with the same key.
 
 ## Finding Stumps without joining their chat

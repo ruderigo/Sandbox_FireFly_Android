@@ -31,6 +31,10 @@ def wait(cond, secs, what):
         time.sleep(0.2)
     check(False, what); return False
 
+# The mesh landing room: #lora-mesh since Stump 1.0.0-beta.4, #lxmf before (FAKE_STUMP_OLD=1).
+OLD_NODE = os.environ.get("FAKE_STUMP_OLD") == "1"
+MR = "lxmf" if OLD_NODE else "lora-mesh"
+print(f"-- the node calls its mesh room #{MR}")
 tmp = tempfile.mkdtemp(prefix="ff-stump-")
 node = subprocess.Popen([sys.executable, os.path.join(here, "fake_stump.py"), os.path.join(tmp, "node"), "47520"],
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -62,8 +66,8 @@ v = lambda: json.loads(api.stump_view(key))
 wait(lambda: any(l["mine"] and l["state"] == "delivered" for l in v()["lines"]), 30,
      "own room line drawn at once, then marked delivered to the node")
 wait(lambda: any(l["nick"] == "alice" and "welcome" in l["body"] for l in v()["lines"]), 30,
-     "room traffic pushed by the node lands in #lxmf")
-check(v()["room"] == "lxmf", "mesh users land in #lxmf")
+     f"room traffic pushed by the node lands in #{MR}")
+check(v()["room"] == MR, f"mesh users land in #{MR}")
 wait(lambda: any(t["nick"] == "alice" and t["unread"] for t in v()["threads"]), 30, "alice's DM threaded, unread")
 check(any(e["type"] == "stump_dm" and e["nick"] == "alice" for e in events), "DM notification event")
 api.stump_send_dm(key, "alice", "merci alice")
@@ -125,10 +129,10 @@ wait(lambda: any(r["name"] == "lounge" and r["tier"] == "hybrid" for r in v()["r
      "/rooms parsed with tiers")
 api.stump_join(key, "lounge")
 wait(lambda: v()["room"] == "lounge", 30, "/join moved us (room from the node's → reply)")
-lx_lines = lambda: [l["body"] for l in json.loads(api.stump_view(key, "lxmf"))["lines"]]
+lx_lines = lambda: [l["body"] for l in json.loads(api.stump_view(key, MR))["lines"]]
 lo_lines = lambda: [l["body"] for l in json.loads(api.stump_view(key, "lounge"))["lines"]]
-wait(lambda: "bye from #lxmf" in lx_lines(), 30, "a line sent in #lxmf just as we left arrives after the move...")
-check("bye from #lxmf" not in lo_lines(), "...and is filed in #lxmf by its batch title, not in #lounge")
+wait(lambda: f"bye from #{MR}" in lx_lines(), 30, "a line sent in the landing room just as we left arrives after the move...")
+check(f"bye from #{MR}" not in lo_lines(), "...and is filed there by its batch title, not in #lounge")
 api.stump_join(key, "vip")
 if not wait(lambda: any(l["body"].startswith("⊘ #vip minted") for l in v()["lines"]), 30, "/join vip unverified: ⊘ #vip minted"):
     print("      DEBUG room", v()["room"], [l["body"][:50] for l in v()["lines"]][-6:])
@@ -147,17 +151,24 @@ api.stump_join(key, "main")
 wait(lambda: v()["room"] == "main", 30, "joined #main")
 time.sleep(22)                                   # longer than the node's timeout (20 s here)
 api.stump_post(key, "anyone still here?")
-wait(lambda: v()["room"] == "lxmf", 30, "node put us back in #lxmf: seen from our own ✓, no → line")
-lx = lambda: json.loads(api.stump_view(key, "lxmf"))["lines"]
+wait(lambda: v()["room"] == MR, 30, f"node put us back in #{MR}: seen from our own ✓, no → line")
+lx = lambda: json.loads(api.stump_view(key, MR))["lines"]
 main_lines = [l["body"] for l in json.loads(api.stump_view(key, "main"))["lines"]]
 after_move = main_lines[len(main_lines) - 1 - main_lines[::-1].index("→ #main"):]
-check("✓ ~Rod-Phone" not in after_move, "the re-landing ✓ is shown in #lxmf, not in #main")
+check("✓ ~Rod-Phone" not in after_move, "the re-landing ✓ is shown in the landing room, not in #main")
 check(any(l["mine"] and l["body"] == "anyone still here?" for l in lx()),
-      "the message sent at that moment is filed in #lxmf, where it landed")
+      "the message sent at that moment is filed in the landing room, where it landed")
 sess = core.sessions[key]
 sess.room = "main"; sess._save(room="main")      # simulate a stale belief
-api.stump_post(key, "/j lxmf")
-wait(lambda: v()["room"] == "lxmf", 30, "'tu es déjà dans #lxmf' corrects a stale room")
+api.stump_post(key, "/j lxmf")                    # the old name: a beta.4 node still takes it
+wait(lambda: v()["room"] == MR, 30, f"'/j lxmf' then the node's '= #{MR}' corrects a stale room")
+if not OLD_NODE:
+    # History kept under the old name follows the room when the node uses the new one.
+    sess.room = "lxmf"; sess._save(room="lxmf")
+    core.store.add_line(key, "lxmf", "msg", "said before the rename", nick="alice")
+    sess._set_room("lora-mesh")
+    check(sess.room == "lora-mesh" and any(l["body"] == "said before the rename" for l in core.store.lines(key, "lora-mesh"))
+          and not core.store.lines(key, "lxmf"), "#lxmf history moves to #lora-mesh, the same room under its new name")
 
 print("-- over Wi-Fi (HTTP)")
 rrc = FakeRRC(rns_verify)
@@ -202,13 +213,22 @@ wait(lambda: any("rolls 4" in b for b in wlines()), 15, "!roll: the plugin answe
 wait(lambda: any(b.startswith("⧗") for b in wlines()), 15, "a 4th !roll in 10 s: ⧗ shown in the room")
 sess = core.sessions[wkey]
 note = core.store.add_dm(wkey, "alice", True, "♪ 1.0 s", "pending", audio=(16, opus_note))
-sess.voice_sent_at[note] = time.time() - 2           # the note went out, then a command after it
-sess.last_command_at = time.time()
+sess.last_sent = {"kind": "command", "id": None, "text": "!roll", "at": time.time()}     # a command after the note
 sess.on_http_replies(["⧗ — slow down: too many commands"], None)
 check(vrow(wkey, "alice", note)["state"] == "pending", "a ⧗ after a later command leaves the voice note alone")
-sess.last_command_at = time.time() - 5                 # now the note is the latest thing we sent
+sess.last_sent = {"kind": "voice", "id": note, "text": None, "at": time.time()}          # the note was the last thing
 sess.on_http_replies(["⧗ — slow down: one voice note every 5 seconds"], None)
 check(vrow(wkey, "alice", note)["state"] == "failed", "...and fails it when the note was the last thing sent")
+if not OLD_NODE:
+    time.sleep(6.5)                                    # let the node's line allowance refill (3, then 1 per 2 s)
+    for i in range(4):
+        api.stump_post(wkey, f"quick line {i}")
+    wait(lambda: any(l["body"] == "quick line 3" and l["mine"] and l.get("state") == "failed" for l in w()["lines"]),
+         15, "lines too fast: the 4th is refused (⧗) and shown as not sent, to tap and resend")
+    check(sum(1 for l in w()["lines"] if l["body"].startswith("quick line")) == 4, "...the other three arrived")
+    time.sleep(2.5)
+    api.stump_post(wkey, "quick line 3")
+    wait(lambda: sum(1 for l in w()["lines"] if l["body"] == "quick line 3") == 2, 15, "...and resending it works")
 print("-- hide and show again")
 keys = lambda: [k for n in json.loads(api.stump_nodes()) for k in [n["key"]] + [o["key"] for o in n["others"]]]
 rows = [n for n in json.loads(api.stump_nodes()) if key in [n["key"]] + [o["key"] for o in n["others"]]]
@@ -245,7 +265,7 @@ check(not core.store.messages(node_hex) and core.store.peer(node_hex) is None an
       "its raw LXMF traffic and peer entry are gone too")
 wait(lambda: key in keys() and core.is_stump(node_hex), 40,
      "still on the air: its next beacon brings it back as a new entry")
-check(not core.store.lines(key, "lxmf") and not core.store.dm_threads(key), "...with no old history")
+check(not core.store.lines(key, MR) and not core.store.dm_threads(key), "...with no old history")
 
 print("-- announce before a first message")
 core.last_announce = 0

@@ -47,6 +47,8 @@ os.environ.pop("FAKE_STUMP_OLD", None)
 serve_http(80, Spy(rns_verify), FakeWeb(), host="127.0.0.12", delay=0.25)         # a far one: slow answers
 serve_http(80, Spy(rns_verify), FakeWeb(), host="127.0.0.14", node=UNNAMED)        # no name, LoRa off
 serve_http(80, Spy(rns_verify), FakeWeb(), host="127.0.0.16", node=HOME_PAGE)      # beta.2: /node.json is the home page
+serve_http(8080, Spy(rns_verify), FakeWeb(), host="127.0.0.20",                      # a Stump on a computer: port 8080
+           node=dict(A, name="Laptop", lxmf="ab" * 16, ap_ip="192.168.137.1", chain=None))
 
 class Plain(BaseHTTPRequestHandler):                                              # not a Stump
     def log_message(self, *a): pass
@@ -77,6 +79,9 @@ os.environ["FAKE_STUMP_OLD"] = "1"
 p = discovery.probe(http, "http://127.0.0.9")
 check("an older node: recognised by /files.json", p["stump"] and p["via"] == "/files.json", p)
 del os.environ["FAKE_STUMP_OLD"]
+p4 = discovery.probe(http, "http://127.0.0.20")
+check("a Stump on a computer (port 8080) found from its bare address", p4["stump"] and p4["name"] == "Laptop"
+      and p4["base"] == "http://127.0.0.20:8080", p4)
 check("a web server that isn't a Stump: not one", discovery.probe(http, "http://127.0.0.7") == {"base": "http://127.0.0.7", "stump": False})
 check("nobody there: not one, quickly", discovery.probe(http, "http://127.0.0.3")["stump"] is False)
 
@@ -84,8 +89,9 @@ print("-- the whole /24")
 t = time.monotonic()
 found = discovery.sweep(http, "127.0.0.1", 24)
 took = time.monotonic() - t
-check("sweep finds exactly the five Stumps", sorted(f["base"] for f in found) ==
-      ["http://127.0.0.12", "http://127.0.0.14", "http://127.0.0.16", "http://127.0.0.5", "http://127.0.0.9"],
+check("sweep finds exactly the six Stumps, the one on port 8080 too", sorted(f["base"] for f in found) ==
+      ["http://127.0.0.12", "http://127.0.0.14", "http://127.0.0.16", "http://127.0.0.20:8080", "http://127.0.0.5",
+       "http://127.0.0.9"],
       [f["base"] for f in found])
 check(f"...in a few seconds ({took:.1f} s)", took < 10)
 check("the slow one is ranked last", found[-1]["base"] == "http://127.0.0.12" and found[-1]["median_ms"] >= 240, found[-1])

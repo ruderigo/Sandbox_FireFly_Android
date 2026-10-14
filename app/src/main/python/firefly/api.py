@@ -391,9 +391,9 @@ def _wifi_base(key):
     return str(key)[5:]
 
 
-def stump_board(key):
+def stump_board(key, q=""):
     from . import stump_web
-    return _j(stump_web.board(_need().http, _wifi_base(key)))
+    return _j(stump_web.board(_need().http, _wifi_base(key), q=str(q or "")))
 
 
 def stump_board_post(key, title, body=""):
@@ -401,9 +401,9 @@ def stump_board_post(key, title, body=""):
     return _j(stump_web.board_post(_need().http, _wifi_base(key), title, body or ""))
 
 
-def stump_files(key):
+def stump_files(key, q="", cat=""):
     from . import stump_web
-    return _j(stump_web.files(_need().http, _wifi_base(key)))
+    return _j(stump_web.files(_need().http, _wifi_base(key), q=str(q or ""), cat=str(cat or "")))
 
 
 def stump_plugins(key):

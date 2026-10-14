@@ -85,11 +85,42 @@ web.post = orig
 check("old node: a silently dropped post is detected", not r["ok"] and r["reason"] == "dropped", r)
 del os.environ["FAKE_STUMP_OLD"]
 
+os.environ["FAKE_STUMP_POST_LIMIT"] = "1"
+r = stump_web.board_post(http, BASE, "one more", "")
+check("429 rate_limited: not posted, reason 'rate_limited'", not r["ok"] and r["reason"] == "rate_limited", r)
+del os.environ["FAKE_STUMP_POST_LIMIT"]
+b = stump_web.board(http, BASE, q="velo")
+check("board search: 'velo' finds 'Vélo à vendre…' (accents ignored)", [p["title"] for p in b["posts"]] ==
+      ["Vélo à vendre bon état"], [p["title"] for p in b["posts"]])
+os.environ["FAKE_STUMP_OLD"] = "1"
+b = stump_web.board(http, BASE, q="velo")
+check("...an older node ignores ?q=: FireFly filters itself", [p["title"] for p in b["posts"]] == ["Vélo à vendre bon état"])
+del os.environ["FAKE_STUMP_OLD"]
+
 # ---------------------------------------------------------------- files
 f = stump_web.files(http, BASE)
 names = {x["name"]: x for x in f.get("files", [])}
 check("shelf reads", f["state"] == "ok" and f["credits"] and "photo.jpg" in names, f)
 check("class and cost", names["photo.jpg"]["class"] == "other" and names["photo.jpg"]["cost"] == 1)
+
+f = stump_web.files(http, BASE, q="montreal")
+check("files search: 'montreal' finds 'été à Montréal.txt'", [x["name"] for x in f["files"]] == ["été à Montréal.txt"], f)
+f = stump_web.files(http, BASE, cat="image")
+check("files ?cat=image: the photo, with cat and mtime", [x["name"] for x in f["files"]] == ["photo.jpg"]
+      and f["files"][0]["cat"] == "image" and f["files"][0]["mtime"], f)
+os.environ["FAKE_STUMP_OLD"] = "1"
+f = stump_web.files(http, BASE, q="montreal")
+check("...an older node ignores ?q=: FireFly filters itself", [x["name"] for x in f["files"]] == ["été à Montréal.txt"])
+del os.environ["FAKE_STUMP_OLD"]
+
+# Names from another Stump of a chain (#wifi-mesh): nick@thatstump, in rooms and DMs.
+from firefly import stump as stump_proto
+pm = stump_proto.parse_message("<rod@LaBuche> hi from the chain\n[DM] <rod@LaBuche>: psst")
+check("nick@stump in a room line and a DM", [(x["kind"], x.get("nick") or x.get("author")) for x in pm] ==
+      [("msg", "rod@LaBuche"), ("dm", "rod@LaBuche")], pm)
+check("room aliases: lxmf and lora are lora-mesh, mesh is wifi-mesh", stump_proto.same_room("lxmf", "#lora-mesh")
+      and stump_proto.same_room("lora", "lora-mesh") and stump_proto.same_room("mesh", "wifi-mesh")
+      and not stump_proto.same_room("main", "lora-mesh"))
 
 url = stump_web.download_url(BASE, "été à Montréal.txt")
 check("download URL percent-encodes UTF-8", "%C3%A9t%C3%A9%20%C3%A0%20Montr%C3%A9al.txt" in url, url)

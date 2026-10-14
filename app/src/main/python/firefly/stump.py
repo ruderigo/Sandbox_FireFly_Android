@@ -44,6 +44,23 @@ class BeaconHandler:
             self.on_stump(*info)
 
 
+# Rooms renamed in Stump 1.0.0-beta.4: #lxmf is #lora-mesh (LoRa phones and handhelds
+# land there) and the chain's room is #wifi-mesh. A node still answers to the old
+# names, but replies with the new ones; an older node still calls it #lxmf. FireFly
+# keeps whatever name the node uses and only treats these as the same room.
+ROOM_ALIASES = {"lxmf": "lora-mesh", "lora": "lora-mesh", "chained": "wifi-mesh", "mesh": "wifi-mesh"}
+MESH_LANDING = ("lora-mesh", "lxmf", "lora")
+
+
+def canonical_room(room):
+    room = (room or "").strip().lstrip("#").lower()
+    return ROOM_ALIASES.get(room, room)
+
+
+def same_room(a, b):
+    return canonical_room(a) == canonical_room(b)
+
+
 def parse_beacon(app_data):
     """["stump", version, node name, 16-byte LXMF hash] -> (lxmf_hex, name, version) or None."""
     try:

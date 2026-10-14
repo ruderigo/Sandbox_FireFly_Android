@@ -34,8 +34,9 @@ from concurrent.futures import ThreadPoolExecutor
 from .stump_web import _attr
 
 PROBE_TIMEOUT_MS = 1500
+PORTS = (80, 8080)        # a Stump on a computer may serve on 8080 (CLIENT_QUICKSTART, Stumps on a computer)
 SWEEP_TIMEOUT_MS = 700
-SWEEP_WORKERS = 32
+SWEEP_WORKERS = 48
 STEADY_SAMPLES = 5
 
 
@@ -111,9 +112,17 @@ def steadiness(http, url, samples=STEADY_SAMPLES, timeout_ms=PROBE_TIMEOUT_MS):
     return {"median_ms": round(statistics.median(times)) if times else None, "lost": lost, "samples": samples}
 
 
+def _has_port(base):
+    host = base.split("://", 1)[-1].split("/", 1)[0]
+    return ":" in host
+
+
 def probe(http, base, samples=STEADY_SAMPLES):
-    """identify() plus steadiness, with bars. -> dict, {"stump": False} when nothing Stump-like answers."""
+    """identify() plus steadiness, with bars. -> dict, {"stump": False} when nothing Stump-like answers.
+    An address without a port is tried on 80, then on 8080 (a Stump on a computer)."""
     info = identify(http, base)
+    if not info and not _has_port(base):
+        info = identify(http, base.rstrip("/") + ":8080")
     if not info:
         return {"base": base, "stump": False}
     st = steadiness(http, base + info["via"], samples)
@@ -176,15 +185,16 @@ def lan_hosts(own_ip, prefix):
 def sweep(http, own_ip, prefix, skip=(), timeout_ms=SWEEP_TIMEOUT_MS, workers=SWEEP_WORKERS, samples=3):
     """Every Stump on the local network. -> list of probe() results, steadiest first."""
     hosts = [h for h in lan_hosts(own_ip, prefix) if h not in set(skip)]
+    bases = [f"http://{h}" if p == 80 else f"http://{h}:{p}" for h in hosts for p in PORTS]
 
-    def ask(host):
+    def ask(base):
         try:
-            return identify(http, "http://" + host, timeout_ms)
+            return identify(http, base, timeout_ms)
         except Exception:
             return None
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        found = [r for r in pool.map(ask, hosts) if r]
+        found = [r for r in pool.map(ask, bases) if r]
     out = []
     for info in found:
         st = steadiness(http, info["base"] + info["via"], samples)

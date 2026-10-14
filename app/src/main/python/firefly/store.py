@@ -83,7 +83,8 @@ CREATE TABLE IF NOT EXISTS stump_lines (
     ts          REAL NOT NULL,
     mine        INTEGER DEFAULT 0,
     msg_id      INTEGER,               -- our LXMF message carrying it (mesh), for delivery state
-    remote_id   INTEGER
+    remote_id   INTEGER,
+    local_state TEXT                   -- 'failed' when the node refused it (⧗), whatever LXMF says
 );
 CREATE INDEX IF NOT EXISTS stump_lines_room ON stump_lines(node, room, id);
 CREATE TABLE IF NOT EXISTS stump_dms (
@@ -122,6 +123,8 @@ class Store:
                     self.db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
         if "lxmf" not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_nodes)")}:
             self.db.execute("ALTER TABLE stump_nodes ADD COLUMN lxmf TEXT")
+        if "local_state" not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_lines)")}:
+            self.db.execute("ALTER TABLE stump_lines ADD COLUMN local_state TEXT")
         self.db.commit()
         self.version = 0
 
@@ -327,9 +330,16 @@ class Store:
                 self._write("UPDATE stump_lines SET room=? WHERE node=? AND room=? AND mine=1 AND ts>=?",
                             (to_room, node, from_room, since_ts))
 
+    def set_line_state(self, line_id, state):
+        self._write("UPDATE stump_lines SET local_state=? WHERE id=?", (state, line_id))
+
+    def rename_room(self, node, old, new):
+        """A room the node now calls by another name (#lxmf -> #lora-mesh): its history follows."""
+        self._write("UPDATE stump_lines SET room=? WHERE node=? AND room=?", (new, node, old))
+
     def lines(self, node, room, limit=200):
         rows = self._read("""
-            SELECT l.*, m.state AS state, m.reason AS reason
+            SELECT l.*, COALESCE(l.local_state, m.state) AS state, m.reason AS reason
             FROM stump_lines l LEFT JOIN messages m ON m.id = l.msg_id
             WHERE l.node=? AND l.room=? ORDER BY l.id DESC LIMIT ?""", (node, room, limit))
         return rows[::-1]

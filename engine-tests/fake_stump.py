@@ -16,6 +16,16 @@ import re
 NICK_OK = re.compile(r"[A-Za-z0-9\-_\[\]{}\\^`|]")
 
 
+# Stump 1.0.0-beta.4 renamed #lxmf to #lora-mesh; FAKE_STUMP_OLD=1 is a node from before.
+MESH_ROOM = "lxmf" if os.environ.get("FAKE_STUMP_OLD") == "1" else "lora-mesh"
+ROOM_ALIASES = {} if MESH_ROOM == "lxmf" else {"lxmf": "lora-mesh", "lora": "lora-mesh"}
+
+
+def fold(t):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", (t or "").lower()) if unicodedata.category(c) != "Mn")
+
+
 def clean(n):
     return ("".join(c if NICK_OK.match(c) else "-" for c in n or ""))[:16] or "guest"
 
@@ -25,8 +35,9 @@ class FakeRRC:
         self.verify = verify            # (pub_hex, sig_hex, nonce_hex) -> identity hash hex or None
         self.lock = threading.RLock()
         self.next_id = 1
-        self.rooms = {"main": [], "lxmf": [], "lounge": []}
-        self.topics = {"main": "General. Be decent.", "lxmf": "Mesh", "lounge": ""}
+        self.rooms = {"main": [], MESH_ROOM: [], "lounge": []}
+        self.topics = {"main": "General. Be decent.", MESH_ROOM: "LoRa (radio)", "lounge": ""}
+        self.buckets = {}               # key -> (tokens, time): 3 lines at once, then one every 2 s
         self.tiers = {"lounge": "hybrid", "vip": "minted"}
         self.rooms.setdefault("vip", []); self.topics.setdefault("vip", "verified only")
         self.verified = set()           # keys that passed /auth (minted rooms let them in)
@@ -36,6 +47,18 @@ class FakeRRC:
         self.nonces = {}
         self.plugin_calls = {}          # key -> recent !command times (the tavern plugin's flood guard)
         self.node_lxmf = "00" * 16      # what the poll's node field gives as this node's LXMF address
+
+    def _take_token(self, key):
+        """Lines others see: 3 at once, then one every 2 s (Stump 1.0.0-beta.3's guard)."""
+        if os.environ.get("FAKE_STUMP_OLD") == "1":
+            return True
+        tokens, t = self.buckets.get(key, (3.0, time.time()))
+        tokens = min(3.0, tokens + (time.time() - t) / 2.0)
+        if tokens < 1:
+            self.buckets[key] = (tokens, time.time())
+            return False
+        self.buckets[key] = (tokens - 1, time.time())
+        return True
 
     def _id(self):
         self.next_id += 1
@@ -70,6 +93,8 @@ class FakeRRC:
         with self.lock:
             u = self.users[key]
             me, room = u["nick"], u["room"]
+            if not line.startswith("/") and not self._take_token(key):
+                return ["⧗ — slow down: wait a moment before sending again"], None      # the line wasn't sent
             if line.startswith("!") and line[1:].split()[:1] and line[1:].split()[0].lower() in ("roll", "8ball", "seen"):
                 # A plugin command: an ordinary room line, then the plugin answers from its own
                 # nick. Too many too fast: ⧗, to the sender only.
@@ -104,6 +129,7 @@ class FakeRRC:
                 return ([f"AUTH-OK {h}"] if h else ["AUTH-FAIL signature does not match"]), None
             if cmd in ("/join", "/j"):
                 new = re.sub(r"[^a-z0-9]", "-", rest.strip().lstrip("#").lower())[:20]
+                new = ROOM_ALIASES.get(new, new)                # /join lxmf still works, answers lora-mesh
                 if new == room:
                     return [f"= #{room} — tu es déjà dans #{room}"], None
                 if self.tiers.get(new) == "minted" and key not in self.verified:
@@ -381,11 +407,27 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0):
                 if self._off("BOARD"):
                     return self._text(404, "not offered on this node")
                 with web.lock:
-                    return self._json({"posts": list(web.posts)})
+                    posts = list(web.posts)
+                q = parse_qs(u.query)
+                words = fold(q.get("q", [""])[0]).split()
+                if words and not self._old():               # ?q=: title or body holds one of the words
+                    posts = [p for p in posts if any(w in fold(p["title"] + " " + p["body"]) for w in words)]
+                return self._json({"posts": posts})
             if u.path in ("/files.json", "/files"):
                 if self._off("FILES"):
                     return self._text(404, "not offered on this node")
-                return self._json(web.shelf())
+                shelf = web.shelf()
+                if not self._old():                          # beta.3: cat, mtime, ?q= ?cat= ?sort=
+                    q = parse_qs(u.query)
+                    for f in shelf["files"]:
+                        f["cat"] = "image" if f["name"].lower().endswith((".jpg", ".png")) else f["class"]
+                        f["mtime"] = 1791388089
+                    words = fold(q.get("q", [""])[0]).split()
+                    if words:
+                        shelf["files"] = [f for f in shelf["files"] if any(w in fold(f["name"]) for w in words)]
+                    if q.get("cat"):
+                        shelf["files"] = [f for f in shelf["files"] if f["cat"] == q["cat"][0]]
+                return self._json(shelf)
             if u.path == "/tools.json" and not self._old():
                 return self._json(web.tools())
             if u.path == "/chain.json" and not self._old():
@@ -440,6 +482,8 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0):
                     form = {"title": [str(d.get("title") or "")], "body": [str(d.get("body") or "")]}
                 else:
                     form = parse_qs(raw, keep_blank_values=True)
+                if os.environ.get("FAKE_STUMP_POST_LIMIT") == "1" and not self._old():
+                    return self._result(True, 429, "too many posts: try again in a minute", "rate_limited")
                 ok, info = web.post(form)
                 if self._old() or "application/json" not in self.headers.get("Accept", ""):
                     return self._text(303, "", extra=[("Location", "/billboard")])
@@ -541,9 +585,9 @@ def mesh_main(work, port):
         if key in active and time.time() - active[key] > timeout:
             rrc.leave(key)            # went quiet: no longer a room participant
         active[key] = time.time()
-        landed = rrc.arrive(key, names.get(m.source_hash, "guest"), "lxmf", mesh=True)
+        landed = rrc.arrive(key, names.get(m.source_hash, "guest"), MESH_ROOM, mesh=True)
         if landed:
-            reply(m.source_hash, "→ #lxmf")         # you're told where you landed, before anything else
+            reply(m.source_hash, f"→ #{MESH_ROOM}")     # you're told where you landed, before anything else
             if key not in sent_upto:
                 sent_upto[key] = 0      # first contact only: a re-landing doesn't replay history
         if text.startswith("/auth ") and m.method != LXMF.LXMessage.OPPORTUNISTIC:
