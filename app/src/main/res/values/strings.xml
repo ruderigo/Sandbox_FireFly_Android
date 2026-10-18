@@ -337,4 +337,8 @@
     <string name="find_by_heard">heard by another Stump</string>
     <string name="find_by_sweep">older Stump</string>
     <string name="line_not_sent_auth">not sent: only verified people write in this room. Tap \"Verify me\", then tap here to send again</string>
+    <string name="version">Version</string>
+    <string name="rnode">RNode</string>
+    <string name="in_use">in use</string>
+    <string name="use_rnode">Use</string>
 </resources>

@@ -52,6 +52,10 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                     Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp))
                 }
                 Spacer(Modifier.height(8.dp))
+                // Which RNode: "RNode EA69" (its Bluetooth name), the USB device, or a Wi-Fi host.
+                r.optString("device").takeIf { it.isNotBlank() && it != "null" && state in listOf("online", "connecting") }?.let {
+                    KeyValue(stringResource(R.string.rnode), it)
+                }
                 if (state == "online") {
                     KeyValue(stringResource(R.string.link), when (r.optString("kind")) {
                         "ble" -> "Bluetooth LE"; "usb" -> "USB"; else -> "Wi-Fi" })
@@ -88,6 +92,14 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                             Text(d.optString("name"), style = MaterialTheme.typography.bodyLarge)
                             Text(d.optString("address"), style = MaterialTheme.typography.labelSmall)
                         }
+                        // The one in use says so; any other can be switched to.
+                        val inUse = state == "online" && r.optString("port").equals("ble:" + d.optString("address"), ignoreCase = true)
+                        if (inUse) {
+                            Text(stringResource(R.string.in_use), style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
+                        } else {
+                            Button(stringResource(R.string.use_rnode)) { Engine.fire("use_ble_device", d.optString("address")) }
+                        }
+                        Spacer(Modifier.width(8.dp))
                         Button(stringResource(R.string.forget), primary = false) { Engine.fire("remove_ble_device", d.optString("address")) }
                     }
                 }

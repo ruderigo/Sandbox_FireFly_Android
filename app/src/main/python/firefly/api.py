@@ -224,12 +224,22 @@ def radio_search_now():
         c.radio.search_now()
 
 
+BLE_PORT_PREFIX = "ble:"
+
+
 def add_ble_device(address, name):
     c = _need()
     devs = [d for d in c.settings["radio"]["ble_devices"] if d["address"].upper() != address.upper()]
     devs.append({"address": address.upper(), "name": name or "RNode"})
     c.settings.update({"radio": {"ble_devices": devs, "enabled": True}})
     c.radio.search_now()
+
+
+def use_ble_device(address):
+    """"Use" on a paired RNode: switch to it now, and prefer it from then on."""
+    c = _need()
+    if c.radio:
+        c.radio.use(BLE_PORT_PREFIX + str(address).upper())
 
 
 def remove_ble_device(address):

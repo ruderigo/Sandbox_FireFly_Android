@@ -387,6 +387,13 @@ private fun WebProblem(r: JSONObject, onRetry: () -> Unit) {
 }
 
 
+/** This app's version and build number, as people read it: "0.5.0-beta.9 (build 25)". */
+fun versionLabel(ctx: android.content.Context): String {
+    val info = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0) }.getOrNull()
+    val code = info?.let { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(it) }
+    return (info?.versionName ?: "?") + (code?.let { " (build $it)" } ?: "")
+}
+
 /** This app's version, as the node compares versions (0.5.0-beta.1). */
 fun myVersion(ctx: android.content.Context): String =
     runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "0"

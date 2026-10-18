@@ -1,5 +1,6 @@
 package io.github.ruderigo.firefly.ui
 
+import androidx.compose.ui.platform.LocalContext
 import android.Manifest
 import android.content.Intent
 import android.os.Build
@@ -126,7 +127,9 @@ fun App() {
             else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("firefly", style = MaterialTheme.typography.headlineSmall.copy(color = Amber.Ember))
-                Text(stringResource(R.string.starting), style = MaterialTheme.typography.labelMedium)
+                Text(versionLabel(LocalContext.current), style = MaterialTheme.typography.labelSmall.copy(color = Amber.Dim))
+                Text(stringResource(R.string.starting), style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 8.dp))
             }
         }
     }

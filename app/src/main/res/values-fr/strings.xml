@@ -337,4 +337,8 @@
     <string name="find_by_heard">entendu par un autre Stump</string>
     <string name="find_by_sweep">Stump plus ancien</string>
     <string name="line_not_sent_auth">non envoyé : seules les personnes vérifiées écrivent dans ce salon. Touchez « Me vérifier », puis ici pour renvoyer</string>
+    <string name="version">Version</string>
+    <string name="rnode">RNode</string>
+    <string name="in_use">utilisé</string>
+    <string name="use_rnode">Utiliser</string>
 </resources>

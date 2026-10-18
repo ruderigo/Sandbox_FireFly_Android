@@ -45,6 +45,12 @@ found on the Wi-Fi by asking:
   private message fails with the same reason. In a closed (`mandatory`)
   Stump the room stays empty with the Stump's topic saying why, and fills
   in after Verify.
+- **Version on screen:** Settings › About and the start screen show the
+  version and build number ("0.5.0-beta.9 (build 25)").
+- **Which RNode:** the Network tab's radio section names the RNode in use
+  ("RNode EA69", its Bluetooth name; a USB device's name; a Wi-Fi host).
+- **Use, under Paired RNodes:** switch to another paired RNode at once (it
+  is then tried first from then on); the one in use says "in use".
 
 ### 0.5.0-beta.8: home Wi-Fi is not a Stump's hotspot (from the Stump team's notes)
 On home Wi-Fi with no radio, the "Stump over Wi-Fi" box offered the

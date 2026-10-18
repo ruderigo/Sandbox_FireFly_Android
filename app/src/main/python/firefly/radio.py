@@ -86,7 +86,7 @@ class RadioManager:
     def snapshot(self):
         st = self.status
         out = {"state": st.state, "port": st.port, "detail": st.detail, "board": st.board,
-               "kind": _kind(st.port), "since": st.since}
+               "kind": _kind(st.port), "since": st.since, "device": self.device_name(st.port)}
         i = self.iface
         if i is not None:
             out.update({
@@ -122,9 +122,35 @@ class RadioManager:
         return (int(r["frequency"]), int(r["bandwidth"]), int(r["tx_power"]),
                 int(r["spreading_factor"]), int(r["coding_rate"]))
 
+    def device_name(self, port):
+        """Which RNode this is, as people know it: "RNode EA69" (its Bluetooth name, saved
+        when it was paired), the USB device's name, or the host of a Wi-Fi RNode."""
+        if not port:
+            return None
+        if port.startswith(BLE_PREFIX):
+            addr = port[len(BLE_PREFIX):].upper()
+            for d in self.core.settings["radio"].get("ble_devices", []):
+                if d.get("address", "").upper() == addr:
+                    return d.get("name") or addr
+            return addr
+        if port.startswith(USB_PREFIX):
+            return getattr(self, "_usb_labels", {}).get(port) or "USB"
+        if port.startswith(TCP_PREFIX):
+            return port[len(TCP_PREFIX):]
+        return port
+
+    def use(self, port):
+        """Switch to this RNode now (it's also first from then on): let go of the one in use
+        and connect to it; if it doesn't answer, the others are tried as usual."""
+        self.core.settings.update({"radio": {"port": port, "enabled": True}})
+        self.switch_to = port               # done by the radio's own loop (_tick), not from here
+        self.search_now()
+
     def _usb_ports(self):
         try:
-            return [p["id"] for p in json.loads(str(self.links.usbPortsJson()))]
+            ports = json.loads(str(self.links.usbPortsJson()))
+            self._usb_labels = {p["id"]: p.get("label") for p in ports}
+            return [p["id"] for p in ports]
         except Exception as e:
             RNS.log(f"Could not list USB devices: {e}", RNS.LOG_WARNING)
             return []
@@ -140,6 +166,10 @@ class RadioManager:
 
         params = self._params()
         usb = self._usb_ports()
+        switch, self.switch_to = getattr(self, "switch_to", None), None
+        if self.iface and switch and self.status.port != switch:
+            self._detach()                  # "Use" on another RNode: let this one go
+            self.status.set(RadioStatus.SEARCHING, detail=f"switching to {self.device_name(switch)}")
         if self.iface:
             port = self.status.port
             vanished = port.startswith(USB_PREFIX) and port not in usb

@@ -281,6 +281,8 @@ fun SettingsScreen() {
 
             Section(stringResource(R.string.about)) {
                 Text(stringResource(R.string.about_text), style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+                KeyValue(stringResource(R.string.version), versionLabel(ctx))
                 Button(stringResource(R.string.quit), primary = false, modifier = Modifier.padding(top = 10.dp)) { EngineService.quit(ctx) }
             }
             Spacer(Modifier.height(72.dp))         // room for the banner over the last section
