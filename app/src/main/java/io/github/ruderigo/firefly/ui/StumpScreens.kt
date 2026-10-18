@@ -44,12 +44,20 @@ import org.json.JSONObject
 fun StumpsScreen(go: (Route) -> Unit) {
     val nodes = engineData(emptyList<JSONObject>()) { Engine.arr("stump_nodes").objects() }
     val settings = engineData(JSONObject()) { Engine.obj("settings_get") }
-    // The Stump you're standing next to is the gateway of the Wi-Fi you joined (192.168.n.1 along
-    // a chain); the saved default is only for when the phone isn't on Wi-Fi.
+    // The address box: the gateway when it really is a Stump (its own hotspot, 192.168.n.1 along
+    // a chain); otherwise the saved default. Connect asks /node.json before opening anything.
     val gateway by WifiHttp.gateway.collectAsState()
-    var url by remember(settings, gateway) {
-        mutableStateOf(gateway?.let { "http://$it" } ?: settings.optString("stump_wifi_default", "http://192.168.4.1"))
+    // The gateway is a Stump only on a Stump's own hotspot; on home Wi-Fi it's the router.
+    // So it's asked (/node.json) before it's offered: null while asking, then the answer.
+    var gwProbe by remember(gateway) { mutableStateOf<JSONObject?>(null) }
+    LaunchedEffect(gateway) { gateway?.let { gwProbe = Engine.obj("discover_probe", "http://$it") } }
+    val gwStump = gwProbe?.takeIf { it.optBoolean("stump") }
+    var url by remember(settings, gwStump) {
+        mutableStateOf(gwStump?.optString("base") ?: settings.optString("stump_wifi_default", "http://192.168.4.1"))
     }
+    var connecting by remember { mutableStateOf(false) }
+    var connectError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val hidden = engineData(0) { Engine.call("stump_hidden_count").toIntOrNull() ?: 0 }
     var acting by remember { mutableStateOf<JSONObject?>(null) }
     var removing by remember { mutableStateOf<JSONObject?>(null) }
@@ -100,16 +108,41 @@ fun StumpsScreen(go: (Route) -> Unit) {
         item {
             Section(stringResource(R.string.join_wifi)) {
                 Text(stringResource(R.string.join_wifi_help), style = MaterialTheme.typography.bodySmall)
-                gateway?.let {
-                    Text(stringResource(R.string.join_wifi_gateway, it), style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(top = 4.dp))
+                gateway?.let { gw ->
+                    val p = gwProbe
+                    Text(when {
+                        p == null -> stringResource(R.string.find_checking, gw)
+                        p.optBoolean("stump") -> stringResource(R.string.join_wifi_gateway_stump,
+                            p.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: "Stump", gw)
+                        else -> stringResource(R.string.join_wifi_gateway_router, gw)
+                    }, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
                 }
                 Spacer(Modifier.height(8.dp))
-                Field(url, { url = it }, Modifier.fillMaxWidth(), mono = true)
+                Field(url, { url = it; connectError = null }, Modifier.fillMaxWidth(), mono = true)
+                connectError?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall.copy(color = Amber.Error), modifier = Modifier.padding(top = 4.dp))
+                }
                 Spacer(Modifier.height(8.dp))
-                Button(stringResource(R.string.connect)) {
-                    val u = url
-                    Engine.fire("stump_connect_wifi", u)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Button(stringResource(if (connecting) R.string.connect_checking else R.string.connect), enabled = !connecting) {
+                        val u = url
+                        connecting = true; connectError = null
+                        scope.launch {
+                            val r = Engine.obj("stump_connect_checked", u)
+                            connecting = false
+                            val k = r.optString("key")
+                            if (k.isNotBlank() && k != "null") {
+                                go(Route.Node(k))
+                            } else {
+                                connectError = r.optString("error").takeIf { it.isNotBlank() && it != "null" }
+                                    ?.let { why -> "${r.optString("base", u)}: $why" }
+                            }
+                        }
+                    }
+                    if (connectError != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Button(stringResource(R.string.find_stumps), primary = false) { go(Route.FindStumps) }
+                    }
                 }
             }
         }
@@ -149,7 +182,9 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
             listOfNotNull(
                 if (mesh) stringResource(R.string.via_mesh) else stringResource(R.string.via_wifi),
                 view.optString("nick").takeIf { it.isNotBlank() && it != "null" }?.let { stringResource(R.string.you_are, it) },
-                if (view.optInt("online") == 0) stringResource(R.string.unreachable) else null,
+                if (view.optInt("online") == 0) stringResource(R.string.unreachable) +
+                    (view.optString("offline_reason").takeIf { !mesh && it.isNotBlank() && it != "null" }?.let { ": $it" } ?: "")
+                else null,
                 chain?.takeIf { it.optBoolean("enabled") }?.let {
                     stringResource(if (it.optString("role") == "root") R.string.chain_root else R.string.chain_member)
                 },
@@ -177,7 +212,7 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
                 stringResource(R.string.stump_remove) to { menuRemove = true }))
         }
         if (mesh && !view.optBoolean("reachable", true)) NoRadioBanner(view.optString("wifi_alt").takeIf { it.isNotBlank() && it != "null" }) {
-            go(Route.Node(it))
+            go(if (it != null) Route.Node(it) else Route.FindStumps)
         }
         if (!mesh) UpdateBanner(key, tools)
         if (!mesh) RadioMatch(radio) {
@@ -254,7 +289,7 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
         if (lines.isEmpty()) item { Empty(stringResource(if (mesh) R.string.room_empty_mesh else R.string.room_empty)) }
         items(lines, key = { it.optLong("id") }) { l ->
             // A line the node refused (⧗: too fast) wasn't sent: a tap sends it again.
-            val failed = l.optInt("mine") == 1 && l.optString("state") == "failed"
+            val failed = l.optInt("mine") == 1 && l.optString("state") in listOf("failed", "error")
             Box(if (failed) Modifier.clickable { Engine.fire("stump_post", key, l.optString("body")) } else Modifier) {
                 RoomLine(l)
             }
@@ -270,8 +305,13 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
 @Composable
 private fun RoomLine(l: JSONObject) {
     // Refused by the node (⧗, too fast) or never delivered over LoRa: two different reasons.
-    val notSent = stringResource(if (!l.isNull("local_state") && l.optString("local_state") == "failed")
-        R.string.line_not_sent else R.string.line_not_delivered)
+    // "error": it never reached the node over Wi-Fi (the reason is the line just after it).
+    val notSent = stringResource(when (l.optString("local_state").takeIf { !l.isNull("local_state") }) {
+        "failed" -> R.string.line_not_sent
+        "error" -> R.string.line_not_sent_net
+        else -> R.string.line_not_delivered
+    })
+    val lineFailed = l.optString("state") in listOf("failed", "error")
     val kind = l.optString("kind")
     val nick = l.optString("nick").takeIf { it.isNotBlank() && it != "null" }
     val body = l.optString("body")
@@ -287,10 +327,10 @@ private fun RoomLine(l: JSONObject) {
             else -> withStyle(SpanStyle(color = if (body.startsWith("AUTH-FAIL") || body.startsWith("⊘")) Amber.Error else Amber.Dim)) { append(body) }
         }
         if (l.optInt("mine") == 1 && !l.isNull("state")) {
-            withStyle(SpanStyle(color = if (l.optString("state") == "failed") Amber.Error else Amber.Dim)) {
-                append("  " + stateGlyph(l.optString("state")))
+            withStyle(SpanStyle(color = if (lineFailed) Amber.Error else Amber.Dim)) {
+                append("  " + stateGlyph(if (lineFailed) "failed" else l.optString("state")))
             }
-            if (l.optString("state") == "failed") withStyle(SpanStyle(color = Amber.Error)) {
+            if (lineFailed) withStyle(SpanStyle(color = Amber.Error)) {
                 append("  " + notSent)
             }
         }
@@ -461,7 +501,7 @@ private fun RadioMatch(radio: JSONObject?, onUse: () -> Unit) {
 
 /** A Stump opened over LoRa with no radio and no other path: nothing can be sent. Say so. */
 @Composable
-private fun NoRadioBanner(wifiKey: String?, openWifi: (String) -> Unit) {
+private fun NoRadioBanner(wifiKey: String?, openWifi: (String?) -> Unit) {
     Row(Modifier.fillMaxWidth().background(Amber.Sidebar).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -469,10 +509,9 @@ private fun NoRadioBanner(wifiKey: String?, openWifi: (String) -> Unit) {
             Text(stringResource(if (wifiKey != null) R.string.no_radio_wifi else R.string.no_radio_text),
                 style = MaterialTheme.typography.labelSmall)
         }
-        if (wifiKey != null) {
-            Spacer(Modifier.width(8.dp))
-            Button(stringResource(R.string.open_over_wifi)) { openWifi(wifiKey) }
-        }
+        Spacer(Modifier.width(8.dp))
+        // Its Wi-Fi entry if there is one; otherwise look for it on this network.
+        Button(stringResource(if (wifiKey != null) R.string.open_over_wifi else R.string.find_over_wifi)) { openWifi(wifiKey) }
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))
 }

@@ -267,7 +267,6 @@
     <string name="update_install">Instalar</string>
     <string name="update_ready">Descargado. Toca Instalar; Android pide una vez permitir que FireFly instale apps.</string>
     <string name="update_same_key">se instala sobre esta solo si está firmada con la misma clave</string>
-    <string name="join_wifi_gateway">La puerta de enlace de este Wi-Fi es %1$s: es el Stump que tienes al lado.</string>
     <string name="chain_root">primer Stump de una cadena</string>
     <string name="chain_member">en una cadena de Stumps</string>
     <string name="find_stumps">Buscar Stumps</string>
@@ -330,4 +329,9 @@
     <string name="no_radio_text">Conecta un RNode (pestaña Red), o llega a este Stump por su Wi-Fi.</string>
     <string name="no_radio_wifi">Este Stump también se alcanza por Wi-Fi.</string>
     <string name="open_over_wifi">Abrir por Wi-Fi</string>
+    <string name="join_wifi_gateway_stump">%1$s responde en %2$s, la puerta de enlace de este Wi-Fi: es el Stump que tienes al lado.</string>
+    <string name="join_wifi_gateway_router">La puerta de enlace de este Wi-Fi (%1$s) no es un Stump: es tu router. Para encontrar un Stump en esta red, usa Buscar Stumps.</string>
+    <string name="connect_checking">Comprobando…</string>
+    <string name="find_over_wifi">Buscar por Wi-Fi</string>
+    <string name="line_not_sent_net">no enviado (el Stump no respondió): toca para reenviar</string>
 </resources>

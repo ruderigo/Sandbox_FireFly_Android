@@ -121,16 +121,35 @@ def _has_port(base):
 def probe(http, base, samples=STEADY_SAMPLES):
     """identify() plus steadiness, with bars. -> dict, {"stump": False} when nothing Stump-like answers.
     An address without a port is tried on 80, then on 8080 (a Stump on a computer)."""
-    info = identify(http, base)
-    if not info and not _has_port(base):
-        info = identify(http, base.rstrip("/") + ":8080")
+    info = find(http, base)
     if not info:
         return {"base": base, "stump": False}
-    st = steadiness(http, base + info["via"], samples)
+    st = steadiness(http, info["base"] + info["via"], samples)     # the port that answered
     info.update(st)
     info["stump"] = True
     info["steady_bars"] = steady_bars(st["median_ms"], st["lost"], st["samples"])
     return info
+
+
+def find(http, base):
+    """identify() on `base`, then on :8080 when no port was given. -> dict or None."""
+    info = identify(http, base)
+    if not info and not _has_port(base):
+        info = identify(http, base.rstrip("/") + ":8080")
+    return info
+
+
+def why_not(http, base, timeout_ms=PROBE_TIMEOUT_MS):
+    """Nothing Stump-like at `base`: what is there instead, in words."""
+    from .stump_session import net_reason
+    try:
+        r = http.request("GET", base + "/node.json", "{}", None, timeout_ms)
+        status, raw = int(_attr(r, "status")), _attr(r, "body")
+    except Exception as e:
+        return net_reason(str(e))
+    if status < 0:
+        return net_reason(bytes(raw) if raw is not None else b"")
+    return f"something answers there (HTTP {status}), but it isn't a Stump: a router, or another device's web page"
 
 
 # ------------------------------------------------------------------ bars

@@ -16,6 +16,7 @@ node's own `[DM] <you>: text` line confirms a recipient was found, or `⊖ nick`
 says there's no one by that name.
 """
 import json
+import re
 import queue
 import random
 import threading
@@ -177,10 +178,12 @@ class WifiPipe:
                     self.session.on_http_error("chat is not offered on this node")
                 elif status == 413:
                     self.session.on_http_error("message too large for the node (8 KB max)")
+                elif status < 0:
+                    self.session.on_http_error(f"not sent: {net_reason(body)}", sent=line, unsent=True)
                 else:
-                    self.session.on_http_error(f"send failed ({status})", sent=line)
+                    self.session.on_http_error(f"send failed (HTTP {status})", sent=line, unsent=True)
             except Exception as e:
-                self.session.on_http_error(f"send failed: {e}", sent=line)
+                self.session.on_http_error(f"not sent: {net_reason(str(e))}", sent=line, unsent=True)
             self.wake.set()                 # see our line / its effects on the next poll, now
 
     def _poll_loop(self):
@@ -198,15 +201,37 @@ class WifiPipe:
                     ok = True
                 elif status == 404:
                     self.session.on_http_error("chat is not offered on this node")
+                elif status < 0:
+                    self.session.set_online(False, net_reason(body))
                 else:
-                    self.session.set_online(False)
+                    self.session.set_online(False, f"HTTP {status}: not a Stump's chat")
             except Exception as e:
                 RNS.log(f"Stump poll {self.base} failed: {e}", RNS.LOG_DEBUG)
-                self.session.set_online(False)
+                self.session.set_online(False, net_reason(str(e)))
             # Reference cadence: 2 s, doubled per failure up to 30 s, reset on success, +0..30% jitter.
             self.interval = POLL_BASE_S if ok else min(self.interval * 2, POLL_MAX_S)
             self.wake.wait(self.interval * (1 + random.random() * POLL_JITTER))
             self.wake.clear()
+
+
+def net_reason(body):
+    """Why a request got no HTTP answer at all (WifiHttp gives status -1 and the
+    exception's text), in words: refused, timed out, nothing at that address."""
+    t = (bytes(body).decode("utf-8", "replace") if isinstance(body, (bytes, bytearray)) else str(body or "")).strip()
+    low = t.lower()
+    if "refused" in low:
+        return "connection refused: nothing is listening at that address"
+    if "ehostunreach" in low or "no route to host" in low:
+        return "no device at that address on this Wi-Fi"
+    if "enetunreach" in low or "network is unreachable" in low:
+        return "this Wi-Fi can't reach that address"
+    if "timed out" in low or "timeout" in low or re.search(r"after \d+ ?ms", low):
+        return "no answer (timed out)"
+    if "unable to resolve host" in low or "no address associated" in low:
+        return "can't find that name"
+    if "cleartext" in low:
+        return "plain HTTP refused by the phone"
+    return t[:140] or "no answer"
 
 
 def _attr(obj, name):
@@ -264,6 +289,7 @@ class StumpSession:
         self.last_command_at = 0.0          # our last /command or !plugin line (⧗ can answer either)
         self.last_sent = None               # the last thing we sent: {"kind", "id", "text", "at"} (what a ⧗ refused)
         self._reply_to = None               # the line an HTTP reply answers, while it's handled
+        self.offline_reason = None          # why the last Wi-Fi poll got nothing ("connection refused"…)
         self.hw = None                      # the node's radio state from the poll (Stump 1.0.0-beta.5+)
         self._save(name=name or node.get("name") or pipe.address, room=self.room, active=1,
                    last_seen=time.time())
@@ -283,7 +309,8 @@ class StumpSession:
     def _save(self, **fields):
         self.store.upsert_stump_node(self.key, self.pipe.kind, self.pipe.address, **fields)
 
-    def set_online(self, online):
+    def set_online(self, online, reason=None):
+        self.offline_reason = None if online else reason
         self._save(online=1 if online else 0, **({"last_seen": time.time()} if online else {}))
 
     # ------------------------------------------------------------ outgoing
@@ -519,8 +546,18 @@ class StumpSession:
             self.pipe.poke()
 
     @_while_open
-    def on_http_error(self, text, sent=None):
+    def on_http_error(self, text, sent=None, unsent=False):
+        """The node didn't take `sent` (no answer, or an HTTP error). Only a ⧗ from the
+        node means "too fast"; this is drawn as "not sent", with the reason beside it."""
         self.store.add_line(self.key, self.room, "reply", text)
+        if unsent and sent and sent.lower().startswith("/auth"):
+            self.auth = None
+            self._save(auth="failed", auth_detail=text)
+            return
+        if unsent and sent and not sent.startswith(("/", "!")):
+            line_id = self.store.add_line(self.key, self.room, "msg", sent, nick=self.my_nick(), mine=True)
+            self.store.set_line_state(line_id, "error")
+            return
         if sent and sent.lower().startswith(DM_COMMANDS):
             nick = sent.split(" ", 2)[1] if len(sent.split(" ", 2)) > 1 else ""
             for dm in self.store.pending_dms(self.key):

@@ -316,6 +316,23 @@ def stump_connect_wifi(base):
     return _need().open_stump_wifi(base).key
 
 
+def stump_connect_checked(base):
+    """Open a Stump typed by hand, only once /node.json (or an older node's JSON) says
+    one is there: a Wi-Fi's gateway is a Stump only on a Stump's own hotspot.
+    -> {"key", "base", "name"} or {"error", "base"}"""
+    from . import discovery
+    from .stump_session import normalize_base
+    c = _need()
+    b = normalize_base(base)
+    info = discovery.find(c.http, b)
+    if not info:
+        return _j({"base": b, "error": discovery.why_not(c.http, b)})
+    sess = c.open_stump_wifi(info["base"])
+    if info.get("lxmf"):
+        c.retire_old_wifi(info["lxmf"], keep=sess.key)      # the same Stump at an older address
+    return _j({"key": sess.key, "base": info["base"], "name": info.get("name")})
+
+
 def stump_close(key, forget=False):
     _need().close_stump(key, forget=bool(forget))
 
@@ -332,6 +349,7 @@ def stump_view(key, room=None):
     node["threads"] = c.store.dm_threads(key)
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
     node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
+    node["offline_reason"] = getattr(sess, "offline_reason", None)     # why the Wi-Fi poll gets nothing
     sess.auth_timed_out()
     node["auth"] = (c.store.stump_node(key) or {}).get("auth", node.get("auth"))
     node["auth_detail"] = (c.store.stump_node(key) or {}).get("auth_detail", node.get("auth_detail"))

@@ -8,10 +8,32 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.7: beta, following the Stump beta (1.0.0-beta.19)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.8: beta, following the Stump beta (1.0.0-beta.20)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
+
+### 0.5.0-beta.8: home Wi-Fi is not a Stump's hotspot (from the Stump team's notes)
+On home Wi-Fi with no radio, the "Stump over Wi-Fi" box offered the
+gateway (the router) as "the Stump you're next to"; sends went there and
+came back as a bare "send failed (-1)".
+- **An address is a Stump only once it says so.** The gateway is asked
+  `/node.json` first: a Stump shows its name, anything else is called
+  your router. **Connect** checks too (port 80, then 8080) and, when no
+  Stump answers, says what's there instead ("connection refused", "a web
+  page, but not a Stump") with a shortcut to Find Stumps.
+- **The same Stump typed at a new address replaces its old entry** at
+  once, without waiting for the first poll.
+- **Real reasons instead of -1:** a line that never reached the node is
+  drawn "not sent (the Stump didn't answer)" with the reason beside it;
+  "too fast" now comes only from the node's own ⧗. An offline Wi-Fi Stump
+  says why in its header.
+- **Verify** ends at once when `/auth` can't be sent, with the reason.
+- **No radio and no Wi-Fi entry yet:** the LoRa side offers **Find over
+  Wi-Fi**.
+- FireFly still keeps no cookies, so a Stump knows it by its address and
+  the one-button `/auth` keeps working; the browsers' visitor ID
+  (`stump_v`, Stump 1.0.0-beta.19) is left for later.
 
 ### 0.5.0-beta.7: a Stump that moved, a phone with no radio (field fix)
 Reported with a Stump on a Mac and a phone without its RNode: the Stump
