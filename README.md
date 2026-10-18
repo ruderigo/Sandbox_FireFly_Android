@@ -30,6 +30,14 @@ found on the Wi-Fi by asking:
   asks when it opens), and with no radio its LoRa screen looks for it on
   the Wi-Fi by itself.
 - The `stump.node` beacon's new fifth item (its web addresses) is read.
+- Checked against a real computer Stump (1.0.0-beta.21, its own
+  `stump_pc.py`): `engine-tests/run_real_discovery.py <SandBox_Stump_On>`.
+  It found two things, both fixed: when a Stump's answer names no address
+  on the phone's network, FireFly now tries the address it answered from
+  (with its port) before the others, and keeps the first that answers as
+  that Stump; and a saved Stump keeps its name ("macOS") when it is
+  reopened or followed, instead of showing "Stump Wi-Fi (address)" until
+  its first poll.
 
 ### 0.5.0-beta.8: home Wi-Fi is not a Stump's hotspot (from the Stump team's notes)
 On home Wi-Fi with no radio, the "Stump over Wi-Fi" box offered the

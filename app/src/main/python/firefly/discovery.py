@@ -271,17 +271,37 @@ def card_from(data, sender=None):
         return None
     urls = [u for u in (d.get("http") or []) if isinstance(u, str) and u.startswith("http")][:8]
     here = d.get("here") if isinstance(d.get("here"), str) and d.get("here", "").startswith("http") else ""
-    base = _base_of(here)
-    if not base and sender:
-        # No address on our network named: the one it answered from, if it serves there.
-        base = next((_base_of(u) for u in urls if "//" + sender + "/" in u or "//" + sender + ":" in u), None)
-    if not base and urls:
-        base = _base_of(urls[0])
-    if not base and sender:
-        base = _base_of("http://" + sender)      # it answered but named no address: where it answered from
+    # Where to reach it, best first: the address it names on our network; one of its
+    # addresses on the host it answered from; that host with its port (a computer
+    # whose route address isn't on our network); then the rest of its list.
+    cands = []
+    def add(b):
+        if b and b not in cands:
+            cands.append(b)
+    add(_base_of(here))
+    if sender:
+        add(next((_base_of(u) for u in urls if "//" + sender + "/" in u or "//" + sender + ":" in u), None))
+        if urls:
+            host = urls[0].split("://", 1)[-1].split("/", 1)[0]
+            port = host.rsplit(":", 1)[1] if ":" in host else ""
+            add(_base_of("http://" + sender + (":" + port if port else "")))
+    for u in urls:
+        add(_base_of(u))
+    if sender:
+        add(_base_of("http://" + sender))         # it answered but named no address
+    base = cands[0] if cands else None
     return {"name": str(d.get("name") or "")[:64] or None, "lxmf": _hash(d.get("lxmf")),
             "release": str(d.get("release") or "")[:32] or None, "http": urls, "here": here or None,
-            "base": base, "from": sender}
+            "base": base, "candidates": cands, "from": sender}
+
+
+def _reachable(http, card):
+    """The first of a card's candidate addresses that answers as this Stump."""
+    for b in card["candidates"][:4]:
+        info = identify(http, b, timeout_ms=800)
+        if info and (not card["lxmf"] or info.get("lxmf") in (None, card["lxmf"])):
+            return info["base"]
+    return None
 
 
 def ask(http, targets=("broadcast",), wait_ms=ASK_WAIT_MS):
@@ -302,6 +322,8 @@ def ask(http, targets=("broadcast",), wait_ms=ASK_WAIT_MS):
         c = card_from(a.get("data"), a.get("from"))
         if not c or not c["base"]:
             continue
+        if not c["here"] and len(c["candidates"]) > 1:
+            c["base"] = _reachable(http, c) or c["base"]
         k = c["lxmf"] or c["base"]
         if k in seen:
             continue

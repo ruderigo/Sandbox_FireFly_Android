@@ -686,8 +686,11 @@ class Core:
         with self.lock:
             sess = self.sessions.get(key)
             if sess is None:
+                # A saved entry keeps its name ("macOS"); the address is only a placeholder
+                # for a Stump not heard yet (its first poll gives its name).
+                saved = (self.store.stump_node(key) or {}).get("name")
                 sess = StumpSession(self, WifiPipe(normalize_base(base), self.http),
-                                    name=f"Stump Wi-Fi ({normalize_base(base).split('://')[-1]})", carry=carry)
+                                    name=saved or f"Stump Wi-Fi ({normalize_base(base).split('://')[-1]})", carry=carry)
                 self.sessions[key] = sess
             return sess
 
