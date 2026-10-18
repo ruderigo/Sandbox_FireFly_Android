@@ -249,7 +249,16 @@ FireFly shows a node's billboard and file shelf, offers its plugin commands, and
 
 ## Finding Stumps without joining their chat
 
-FireFly's Find Stumps screen probes addresses (the Wi-Fi gateway, each address of the local /24, a hotspot just joined) without changing anything on a node. **Never use `/rrc/poll` to probe**: it makes you a chat user, and everyone in the room sees `✓ guest-…`. FireFly asks, in order:
+**Keep a Stump by its identity, not its address.** On a home Wi-Fi the router hands out addresses and can change them (a laptop Stump went .172 → .175 → .176 in a week). FireFly keeps each Stump by its LXMF address (`lxmf`), which never changes, and treats the Wi-Fi address as a cache. Since Stump 1.0.0-beta.21:
+
+- **`STUMP?`**: FireFly sends a UDP datagram `STUMP? v1` to port 4244, broadcast (`255.255.255.255` and the subnet's broadcast address), from a socket bound to the Wi-Fi network while holding a `WifiManager.MulticastLock`, and collects answers for 1.5 s. Each Stump answers with `{"stump": 1, "name", "lxmf", "release", "http": [...], "here"}`; FireFly opens `here`, or else the `http` address it answered from. Find Stumps does this as soon as it opens.
+- **`GET /stumps.json`** on each Stump found: the other Stumps it heard, with their addresses. Those on the phone's network are checked with `/node.json` and listed as "heard by another Stump".
+- **The beacon's fifth item**, the same address list, is kept per `lxmf` and tried when nothing answers `STUMP?`.
+- **When a Wi-Fi Stump stops answering** (connection refused, timeout), FireFly asks again by its `lxmf` (at most every 15 s), moves the entry to the new address with its history ("found macOS at its new address"), and resends the line that failed there. A `/auth` isn't carried over: Verify again.
+- **A Stump known only over LoRa that answers on the Wi-Fi** gets a Wi-Fi entry, so it's chatted with over Wi-Fi; with no radio, its LoRa screen looks for it on the Wi-Fi by itself.
+- An address is called a Stump only once it answers `STUMP?` or `GET /node.json`; the Wi-Fi's gateway is a Stump only on a Stump's own hotspot.
+
+For older Stumps (no `STUMP?` answer), Find Stumps also probes addresses (the Wi-Fi gateway, each address of the local /24, a hotspot just joined) without changing anything on a node. **Never use `/rrc/poll` to probe**: it makes you a chat user, and everyone in the room sees `✓ guest-…`. FireFly asks, in order:
 
 1. `GET /node.json` (Stump `main`, after 1.0.0-beta.2): `{"name", "lxmf", "version", "release", "ap_ip", "chain", "features"}`. `chain` is `null` unless the node is chained, then the `/chain.json` object; `name` and `lxmf` can be `null`. A beta.2 node answers this path with its home page (HTML): anything that isn't a JSON object means "try the next request". FireFly shows `release` and `features`, and flags a node whose `features` lacks `chat`.
 2. `GET /chain.json`: any 1.0.0-beta.2 node answers `{"enabled": …}`, which identifies a Stump (no name).

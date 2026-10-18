@@ -8,10 +8,28 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.8: beta, following the Stump beta (1.0.0-beta.20)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.9: beta, following the Stump beta (1.0.0-beta.21)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
+
+### 0.5.0-beta.9: a Stump is kept by who it is, not where it is (Stump 1.0.0-beta.21)
+A home router moves a laptop Stump from address to address; FireFly kept
+the old one. Now a Stump is kept by its identity (its LXMF address) and
+found on the Wi-Fi by asking:
+- **Find Stumps asks the network** (`STUMP?` on UDP 4244, as soon as it
+  opens): every Stump that answers is listed with its name, wherever the
+  router put it. The ones those Stumps heard (`/stumps.json`) are listed
+  too, and the old address sweep still finds older Stumps.
+- **A Stump that stops answering is found again** by its identity and
+  followed to its new address: same entry, same history, a line saying
+  "found macOS at its new address", and the line that failed is sent
+  there. An open chat screen follows it.
+- **Wi-Fi when it answers, LoRa when there's a radio:** a Stump known only
+  over LoRa that answers on the Wi-Fi gets a Wi-Fi entry (the Stumps tab
+  asks when it opens), and with no radio its LoRa screen looks for it on
+  the Wi-Fi by itself.
+- The `stump.node` beacon's new fifth item (its web addresses) is read.
 
 ### 0.5.0-beta.8: home Wi-Fi is not a Stump's hotspot (from the Stump team's notes)
 On home Wi-Fi with no radio, the "Stump over Wi-Fi" box offered the

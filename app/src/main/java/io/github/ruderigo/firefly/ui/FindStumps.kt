@@ -62,6 +62,20 @@ fun FindStumpsScreen(back: () -> Unit, go: (Route) -> Unit) {
         }
     }
 
+    // On this network: STUMP? answers (Stump 1.0.0-beta.21+), the Stumps they heard, then
+    // the /24 sweep for older ones. Started on its own: nothing to type.
+    fun searchLan() {
+        val l = local ?: return
+        if (sweeping) return
+        sweeping = true
+        scope.launch {
+            val skip = JSONArray().apply { gateway?.let { put(it) } }.toString()
+            lan = Engine.arr("discover_lan", l.substringBefore('/'), l.substringAfter('/').toIntOrNull() ?: 24, skip).objects()
+            sweeping = false
+        }
+    }
+    LaunchedEffect(local) { if (local != null && lan == null) searchLan() }
+
     // Here: whatever answers at this Wi-Fi's gateway, checked again whenever the gateway changes.
     LaunchedEffect(gateway) {
         here = null
@@ -172,15 +186,7 @@ fun FindStumpsScreen(back: () -> Unit, go: (Route) -> Unit) {
                     Text(stringResource(R.string.find_lan_help, local ?: "—"), style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(8.dp))
                     Button(stringResource(if (sweeping) R.string.find_lan_searching else R.string.find_lan_search),
-                        enabled = !sweeping && local != null) {
-                        val l = local ?: return@Button
-                        sweeping = true
-                        scope.launch {
-                            val skip = JSONArray().apply { gateway?.let { put(it) } }.toString()
-                            lan = Engine.arr("discover_lan", l.substringBefore('/'), l.substringAfter('/').toIntOrNull() ?: 24, skip).objects()
-                            sweeping = false
-                        }
-                    }
+                        enabled = !sweeping && local != null) { searchLan() }
                     if (lan?.isEmpty() == true) Note(stringResource(R.string.find_lan_none))
                 }
             }
@@ -228,6 +234,11 @@ private fun StumpFound(s: JSONObject, onOpen: () -> Unit) {
             val chain = s.optJSONObject("chain")
             Text(listOfNotNull(
                 addr.takeIf { s.optString("name").isNotBlank() && s.optString("name") != "null" },
+                when (s.optString("found_by")) {
+                    "heard" -> stringResource(R.string.find_by_heard)
+                    "sweep" -> stringResource(R.string.find_by_sweep)
+                    else -> null
+                },
                 chain?.takeIf { it.optBoolean("enabled") }?.let {
                     stringResource(if (it.optString("role") == "root") R.string.chain_root else R.string.chain_member)
                 },

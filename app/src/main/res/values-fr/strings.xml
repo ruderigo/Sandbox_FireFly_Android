@@ -295,7 +295,7 @@
     <string name="find_password_help">Ce point d\'accès a un mot de passe. Il ne sert qu\'à cette connexion.</string>
     <string name="find_password_hint">Mot de passe Wi-Fi</string>
     <string name="find_lan">Sur ce réseau</string>
-    <string name="find_lan_help">Un Stump qui a rejoint le même routeur que vous. FireFly interroge chaque adresse proche de la vôtre (%1$s) : quelques secondes.</string>
+    <string name="find_lan_help">Les Stumps sur le même Wi-Fi que vous (%1$s) : FireFly demande au réseau qui est un Stump, par son nom, quelle que soit l\'adresse donnée par le routeur. Quelques secondes.</string>
     <string name="find_lan_search">Chercher sur ce réseau</string>
     <string name="find_lan_searching">Recherche…</string>
     <string name="find_lan_none">Aucun autre Stump sur ce réseau.</string>
@@ -334,4 +334,6 @@
     <string name="connect_checking">Vérification…</string>
     <string name="find_over_wifi">Chercher en Wi-Fi</string>
     <string name="line_not_sent_net">non envoyé (le Stump n\'a pas répondu) : touchez pour renvoyer</string>
+    <string name="find_by_heard">entendu par un autre Stump</string>
+    <string name="find_by_sweep">Stump plus ancien</string>
 </resources>

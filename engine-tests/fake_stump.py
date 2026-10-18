@@ -353,7 +353,33 @@ class FakeWeb:
             return data
 
 
-def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0):
+def serve_udp(host, card, port=4244):
+    """A Stump answering STUMP? (1.0.0-beta.21) on host:port. card: a dict, or a
+    function returning one (its address can change). Returns a stop() function."""
+    import socket as _s
+    s = _s.socket(_s.AF_INET, _s.SOCK_DGRAM)
+    s.setsockopt(_s.SOL_SOCKET, _s.SO_REUSEADDR, 1)
+    s.bind((host, port))
+    s.settimeout(0.2)
+    alive = {"on": True}
+    def loop():
+        while alive["on"]:
+            try:
+                data, addr = s.recvfrom(256)
+            except Exception:
+                continue
+            if data.startswith(b"STUMP?"):
+                c = card() if callable(card) else card
+                if c:
+                    s.sendto(json.dumps(c).encode(), addr)
+        s.close()
+    threading.Thread(target=loop, daemon=True).start()
+    def stop():
+        alive["on"] = False
+    return stop
+
+
+def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0, directory=None):
     """node: what /node.json answers (a dict), or None for a node without it (404).
     delay: seconds added to every answer, to look like a far or busy Stump."""
     web = web or FakeWeb()
@@ -397,6 +423,10 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0):
             u = urlparse(self.path)
             if delay:
                 time.sleep(delay)
+            if u.path == "/stumps.json":
+                if directory is None:
+                    return self._text(404, "not found")
+                return self._json(directory() if callable(directory) else directory)
             if u.path == "/node.json":
                 if isinstance(node, str):                       # a beta.2 node: the home page, as HTML
                     body = node.encode()

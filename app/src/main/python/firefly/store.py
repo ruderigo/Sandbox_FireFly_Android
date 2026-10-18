@@ -292,6 +292,27 @@ class Store:
                     self._write(f"UPDATE stump_nodes SET {', '.join(k + '=?' for k, _ in changed)} WHERE key=?",
                                 (*[v for _, v in changed], key))
 
+    def rekey_stump(self, old, new, new_address):
+        """The same Stump at a new address: its rooms and DMs move to `new`. If `new`
+        already exists, the old row goes (a verified status carries over)."""
+        with self.lock:
+            # Lines both entries fetched from the Stump (same id and time) are kept once.
+            self.db.execute("""DELETE FROM stump_lines WHERE node=? AND remote_id IS NOT NULL AND EXISTS
+                (SELECT 1 FROM stump_lines n WHERE n.node=? AND n.remote_id=stump_lines.remote_id
+                 AND n.ts=stump_lines.ts)""", (old, new))
+            self.db.execute("UPDATE stump_lines SET node=? WHERE node=?", (new, old))
+            self.db.execute("UPDATE stump_dms SET node=? WHERE node=?", (new, old))
+            if self.db.execute("SELECT 1 FROM stump_nodes WHERE key=?", (new,)).fetchone():
+                o = self.db.execute("SELECT auth, auth_detail, room, nick FROM stump_nodes WHERE key=?", (old,)).fetchone()
+                if o and o[0] == "ok":
+                    self.db.execute("UPDATE stump_nodes SET auth='ok', auth_detail=? WHERE key=? AND auth!='ok'",
+                                    (o[1], new))
+                self.db.execute("DELETE FROM stump_nodes WHERE key=?", (old,))
+            else:
+                self.db.execute("UPDATE stump_nodes SET key=?, address=?, active=1 WHERE key=?", (new, new_address, old))
+            self.db.commit()
+            self.version += 1
+
     def stump_node(self, key):
         rows = self._read("SELECT * FROM stump_nodes WHERE key=?", (key,))
         return _decode_node(rows[0]) if rows else None

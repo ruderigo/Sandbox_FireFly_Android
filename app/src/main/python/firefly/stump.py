@@ -41,7 +41,7 @@ class BeaconHandler:
     def received_announce(self, destination_hash, announced_identity, app_data):
         info = parse_beacon(app_data)
         if info:
-            self.on_stump(*info)
+            self.on_stump(*info, beacon_http(app_data))
 
 
 # Rooms renamed in Stump 1.0.0-beta.4: #lxmf is #lora-mesh (LoRa phones and handhelds
@@ -73,6 +73,17 @@ def parse_beacon(app_data):
         return lxmf_hash.hex(), str(data[2]), str(data[1])
     except Exception:
         return None
+
+
+def beacon_http(app_data):
+    """The beacon's fifth item since Stump 1.0.0-beta.21: the web addresses it serves
+    on, the same list as its STUMP? answer's "http". [] on older Stumps."""
+    try:
+        data = msgpack.unpackb(app_data)
+        extra = data[4] if isinstance(data, list) and len(data) > 4 else None
+        return [u for u in extra if isinstance(u, str) and u.startswith("http")][:6] if isinstance(extra, list) else []
+    except Exception:
+        return []
 
 
 def beacon_hash_for(identity):

@@ -21,6 +21,15 @@ Requests, in order:
   GET /chain.json   any 1.0.0-beta.2 node; {"enabled": …} marks a Stump
   GET /files.json, /billboard.json   older nodes, when they offer them
 
+Since Stump 1.0.0-beta.21 a Stump also answers a question on the local
+network (CLIENT_QUICKSTART, Finding a Stump on a Wi-Fi): a UDP datagram
+starting "STUMP?" to port 4244, broadcast or to one address, gets one JSON
+card per Stump: {"stump": 1, "name", "lxmf", "release", "http": [...],
+"here"}. "lxmf" never changes, so a Stump is kept by it and found again
+when the router gives it a new address. GET /stumps.json on any Stump lists
+the others it heard, with their addresses. The /24 sweep stays for older
+Stumps, and for networks where broadcasts don't get through.
+
 How good a link is ("bars", 0-3):
   signal     the hotspot's RSSI from the scan
   steadiness a few small round trips: median time and how many were lost
@@ -239,3 +248,146 @@ def looks_like_stump(ssid, known=()):
     if s in set(known) or s == DEFAULT_SSID:
         return "yes"
     return "likely" if "stump" in s.lower() else "maybe"
+
+
+# ------------------------------------------------------------------ STUMP? (1.0.0-beta.21)
+UDP_PORT = 4244
+QUERY = b"STUMP? v1"
+ASK_WAIT_MS = 1500
+
+
+def _base_of(url):
+    from .stump_session import normalize_base
+    return normalize_base(url) if isinstance(url, str) and url.startswith("http") else None
+
+
+def card_from(data, sender=None):
+    """One answer to STUMP? -> {"name", "lxmf", "release", "http", "here", "base"} or None."""
+    try:
+        d = json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return None
+    if not isinstance(d, dict) or d.get("stump") != 1:
+        return None
+    urls = [u for u in (d.get("http") or []) if isinstance(u, str) and u.startswith("http")][:8]
+    here = d.get("here") if isinstance(d.get("here"), str) and d.get("here", "").startswith("http") else ""
+    base = _base_of(here)
+    if not base and sender:
+        # No address on our network named: the one it answered from, if it serves there.
+        base = next((_base_of(u) for u in urls if "//" + sender + "/" in u or "//" + sender + ":" in u), None)
+    if not base and urls:
+        base = _base_of(urls[0])
+    if not base and sender:
+        base = _base_of("http://" + sender)      # it answered but named no address: where it answered from
+    return {"name": str(d.get("name") or "")[:64] or None, "lxmf": _hash(d.get("lxmf")),
+            "release": str(d.get("release") or "")[:32] or None, "http": urls, "here": here or None,
+            "base": base, "from": sender}
+
+
+def ask(http, targets=("broadcast",), wait_ms=ASK_WAIT_MS):
+    """Who's a Stump here? -> [card], one per Stump (by lxmf, else by address).
+    "broadcast" asks the whole Wi-Fi (255.255.255.255 and the subnet's); an
+    address asks just that one. Needs the app's udpAsk (Kotlin: bound to the
+    Wi-Fi, with a MulticastLock); nothing comes back without it."""
+    fn = getattr(http, "udpAsk", None)
+    if fn is None:
+        return []
+    try:
+        raw = fn(json.dumps(list(targets)), UDP_PORT, QUERY, int(wait_ms))
+        answers = json.loads(str(raw) or "[]")
+    except Exception:
+        return []
+    out, seen = [], set()
+    for a in answers:
+        c = card_from(a.get("data"), a.get("from"))
+        if not c or not c["base"]:
+            continue
+        k = c["lxmf"] or c["base"]
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(c)
+    return out
+
+
+def directory(http, base, timeout_ms=PROBE_TIMEOUT_MS):
+    """GET /stumps.json: the other Stumps this one heard -> [{"name", "lxmf", "http"}]."""
+    status, data, _ = _get(http, base + "/stumps.json", timeout_ms)
+    if not isinstance(data, dict) or not isinstance(data.get("stumps"), list):
+        return []
+    return [{"name": str(s.get("name") or "")[:64] or None, "lxmf": _hash(s.get("lxmf")),
+             "http": [u for u in (s.get("http") or []) if isinstance(u, str) and u.startswith("http")][:6]}
+            for s in data["stumps"] if isinstance(s, dict)]
+
+
+def _same_net(url, own_ip):
+    host = url.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+    return bool(own_ip) and host.split(".")[:3] == own_ip.split(".")[:3]
+
+
+def find_all(http, own_ip=None, prefix=24, sweep_too=True, samples=3):
+    """Every Stump reachable from this Wi-Fi: STUMP? answers, the Stumps those
+    know (/stumps.json) at an address on this network, then (for older Stumps)
+    the /24 sweep. -> probe()-like dicts, steadiest first, one per Stump."""
+    found = {}
+
+    def add(info, how):
+        if not info:
+            return
+        k = info.get("lxmf") or info["base"]
+        if k in found:
+            return
+        info["found_by"] = how
+        st = steadiness(http, info["base"] + info["via"], samples)
+        info.update(st)
+        info["stump"] = True
+        info["steady_bars"] = steady_bars(st["median_ms"], st["lost"], st["samples"])
+        found[k] = info
+
+    cards = ask(http)
+    for c in cards:
+        info = identify(http, c["base"]) or {
+            "base": c["base"], "via": "/", "name": c["name"], "version": None, "release": c["release"],
+            "lxmf": c["lxmf"], "ap_ip": None, "chain": _chain_summary(None), "features": None, "radio": None,
+            "first_ms": None}
+        info["name"] = info.get("name") or c["name"]
+        info["lxmf"] = info.get("lxmf") or c["lxmf"]
+        info["release"] = info.get("release") or c["release"]
+        info["http"] = c["http"]
+        add(info, "answer")
+    for info in list(found.values()):
+        for other in directory(http, info["base"]):
+            if other["lxmf"] and other["lxmf"] in found:
+                continue
+            for u in other["http"]:
+                if own_ip is None or _same_net(u, own_ip):
+                    add(identify(http, _base_of(u)), "heard")
+                    break
+    if sweep_too and own_ip:
+        known = {f["base"].split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0] for f in found.values()}
+        for info in sweep(http, own_ip, prefix, skip=known, samples=samples):
+            k = info.get("lxmf") or info["base"]
+            if k not in found:
+                info["found_by"] = "sweep"
+                found[k] = info
+    out = list(found.values())
+    out.sort(key=lambda i: (-i["steady_bars"], i.get("median_ms") or 1e9))
+    return out
+
+
+def locate(http, lxmf, hints=()):
+    """Where is the Stump with this identity now? -> its card, or None.
+    Asks the Wi-Fi, then checks the addresses its beacon gave (hints)."""
+    lxmf = (lxmf or "").lower()
+    if not lxmf:
+        return None
+    for c in ask(http):
+        if c["lxmf"] == lxmf:
+            return c
+    for u in hints or ():
+        b = _base_of(u)
+        info = identify(http, b) if b else None
+        if info and info.get("lxmf") == lxmf:
+            return {"name": info.get("name"), "lxmf": lxmf, "release": info.get("release"), "http": [u],
+                    "here": None, "base": info["base"], "from": None}
+    return None

@@ -101,6 +101,43 @@ class UrllibHttp:
             return _Result(-1, str(e).encode())
 
 
+    def udpAsk(self, targets_json, port, payload, wait_ms):
+        """Send `payload` over UDP to each target and collect answers for wait_ms.
+        "broadcast" is 255.255.255.255 (FIREFLY_BROADCAST, comma-separated, overrides
+        it: the tests' loopback Stumps). -> JSON [{"from", "data"}]"""
+        import os, socket
+        targets = []
+        for t in json.loads(targets_json or "[]"):
+            if t == "broadcast":
+                targets += [x.strip() for x in os.environ.get("FIREFLY_BROADCAST", "255.255.255.255").split(",") if x.strip()]
+            else:
+                targets.append(t)
+        out = []
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            s.bind(("0.0.0.0", 0))
+            for t in targets:
+                try:
+                    s.sendto(bytes(payload), (t, int(port)))
+                except OSError:
+                    pass
+            end = time.time() + wait_ms / 1000.0
+            while True:
+                left = end - time.time()
+                if left <= 0:
+                    break
+                s.settimeout(left)
+                try:
+                    data, addr = s.recvfrom(4096)
+                except (socket.timeout, OSError):
+                    break
+                out.append({"from": addr[0], "data": data.decode("utf-8", "replace")})
+        finally:
+            s.close()
+        return json.dumps(out)
+
+
 class _Result:
     def __init__(self, status, body): self.status, self.body = status, body
 
@@ -162,6 +199,7 @@ class WifiPipe:
             line = self.outq.get()
             if line is None:
                 break
+            item = line                             # as queued: resent as is if the Stump moved
             if isinstance(line, tuple):             # ("voice", nick, mode, frames)
                 _, nick, mode, data = line
                 line = f"/msg {nick} {voice_label(mode, data)}"
@@ -179,12 +217,28 @@ class WifiPipe:
                 elif status == 413:
                     self.session.on_http_error("message too large for the node (8 KB max)")
                 elif status < 0:
-                    self.session.on_http_error(f"not sent: {net_reason(body)}", sent=line, unsent=True)
+                    if not self._resend_elsewhere(item, line):
+                        self.session.on_http_error(f"not sent: {net_reason(body)}", sent=line, unsent=True)
                 else:
                     self.session.on_http_error(f"send failed (HTTP {status})", sent=line, unsent=True)
             except Exception as e:
-                self.session.on_http_error(f"not sent: {net_reason(str(e))}", sent=line, unsent=True)
+                if not self._resend_elsewhere(item, line):
+                    self.session.on_http_error(f"not sent: {net_reason(str(e))}", sent=line, unsent=True)
             self.wake.set()                 # see our line / its effects on the next poll, now
+
+    def _resend_elsewhere(self, item, line):
+        """Nothing answered: maybe the router gave the Stump a new address. Find it by
+        its identity and send this there. A /auth isn't carried over (its challenge
+        belongs to this session): Verify again over there."""
+        moved = self.session.relocate() if self.session else None
+        if moved is None:
+            return False
+        if isinstance(line, str) and line.lower().startswith("/auth"):
+            moved.on_http_error("the Stump moved to a new address: tap Verify again", sent=line, unsent=True)
+            return True
+        moved.pipe.outq.put(item)
+        moved.pipe.poke()
+        return True
 
     def _poll_loop(self):
         while self.running:
@@ -203,11 +257,15 @@ class WifiPipe:
                     self.session.on_http_error("chat is not offered on this node")
                 elif status < 0:
                     self.session.set_online(False, net_reason(body))
+                    if self.session.relocate():         # found at a new address: this pipe is done
+                        break
                 else:
                     self.session.set_online(False, f"HTTP {status}: not a Stump's chat")
             except Exception as e:
                 RNS.log(f"Stump poll {self.base} failed: {e}", RNS.LOG_DEBUG)
                 self.session.set_online(False, net_reason(str(e)))
+                if self.session.relocate():
+                    break
             # Reference cadence: 2 s, doubled per failure up to 30 s, reset on success, +0..30% jitter.
             self.interval = POLL_BASE_S if ok else min(self.interval * 2, POLL_MAX_S)
             self.wake.wait(self.interval * (1 + random.random() * POLL_JITTER))
@@ -266,7 +324,7 @@ def _while_open(handler):
 
 
 class StumpSession:
-    def __init__(self, core, pipe, name=None):
+    def __init__(self, core, pipe, name=None, carry=None):
         self.core = core
         self.store = core.store
         self.pipe = pipe
@@ -285,6 +343,10 @@ class StumpSession:
         self.move_join_pending = False      # that move's own "✓ me" hasn't arrived yet
         self.join_target, self.join_at = None, 0.0
         self.seen_remote = set()            # HTTP message ids already stored (dedupe)
+        if carry:                           # the same Stump at a new address: what we already have
+            self.seen_remote |= set(carry.get("seen") or ())
+            if hasattr(pipe, "since"):
+                pipe.since = max(pipe.since, int(carry.get("since") or 0))
         self.closed = False                 # set by stop(): late results are dropped
         self.last_command_at = 0.0          # our last /command or !plugin line (⧗ can answer either)
         self.last_sent = None               # the last thing we sent: {"kind", "id", "text", "at"} (what a ⧗ refused)
@@ -308,6 +370,16 @@ class StumpSession:
 
     def _save(self, **fields):
         self.store.upsert_stump_node(self.key, self.pipe.kind, self.pipe.address, **fields)
+
+    def relocate(self):
+        """Not answering at its address: the session of the same Stump at its new one, or None."""
+        if self.closed or self.pipe.kind != WIFI:
+            return None
+        try:
+            return self.core.relocate(self.key)
+        except Exception as e:
+            RNS.log(f"Stump relocate {self.key} failed: {e}", RNS.LOG_WARNING)
+            return None
 
     def set_online(self, online, reason=None):
         self.offline_reason = None if online else reason

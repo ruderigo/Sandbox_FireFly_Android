@@ -32,6 +32,7 @@ class HttpResult(@JvmField val status: Int, @JvmField val body: ByteArray)
  * process (which would also move Reticulum's TCP peers off mobile data).
  */
 class WifiHttp(context: Context) {
+    private val app = context.applicationContext
     private val cm = context.getSystemService(ConnectivityManager::class.java)
     /** Wi-Fi networks the system has up, with their addresses (the newest last). */
     private val networks = java.util.concurrent.ConcurrentHashMap<Network, LinkProperties>()
@@ -106,6 +107,63 @@ class WifiHttp(context: Context) {
             HttpResult(-1, (e.message ?: e.javaClass.simpleName).toByteArray())
         }
     }
+    /**
+     * "Who's a Stump here?" (Stump 1.0.0-beta.21): send [payload] over UDP to [port] of
+     * each target and collect every answer for [waitMs]. "broadcast" means the whole
+     * Wi-Fi: 255.255.255.255 and the subnet's broadcast address. The socket is bound to
+     * the Wi-Fi network (a joined hotspot without internet included), and a
+     * MulticastLock is held meanwhile: many phones drop broadcast traffic without one.
+     * Returns JSON [{"from": ip, "data": text}].
+     */
+    fun udpAsk(targetsJson: String, port: Int, payload: ByteArray, waitMs: Int): String {
+        val out = org.json.JSONArray()
+        val wm = app.getSystemService(android.net.wifi.WifiManager::class.java)
+        val lock = runCatching { wm?.createMulticastLock("firefly-stump-find")?.apply { setReferenceCounted(false); acquire() } }.getOrNull()
+        try {
+            java.net.DatagramSocket(null).use { s ->
+                s.reuseAddress = true
+                s.broadcast = true
+                s.bind(InetSocketAddress(0))
+                wifi?.let { runCatching { it.bindSocket(s) } }
+                val targets = mutableListOf<String>()
+                val arr = org.json.JSONArray(targetsJson)
+                for (i in 0 until arr.length()) {
+                    val t = arr.getString(i)
+                    if (t == "broadcast") { targets += "255.255.255.255"; subnetBroadcast()?.let { targets += it } }
+                    else targets += t
+                }
+                for (t in targets.distinct()) runCatching {
+                    s.send(java.net.DatagramPacket(payload, payload.size, java.net.InetAddress.getByName(t), port))
+                }
+                val buf = ByteArray(4096)
+                val end = System.currentTimeMillis() + waitMs
+                while (true) {
+                    val left = end - System.currentTimeMillis()
+                    if (left <= 0) break
+                    s.soTimeout = left.toInt().coerceAtLeast(1)
+                    val p = java.net.DatagramPacket(buf, buf.size)
+                    try { s.receive(p) } catch (_: java.net.SocketTimeoutException) { break }
+                    out.put(JSONObject().put("from", p.address.hostAddress).put("data", String(p.data, 0, p.length, Charsets.UTF_8)))
+                }
+            }
+        } catch (_: Exception) {
+            // no Wi-Fi, or sending refused: whatever answered so far
+        } finally {
+            runCatching { lock?.release() }
+        }
+        return out.toString()
+    }
+
+    /** The Wi-Fi subnet's broadcast address (192.168.0.255 on a /24), or null. */
+    private fun subnetBroadcast(): String? {
+        val lp = wifi?.let { networks[it] ?: cm.getLinkProperties(it) } ?: return null
+        val la = lp.linkAddresses.firstOrNull { it.address is Inet4Address } ?: return null
+        val ip = la.address.address.fold(0L) { acc, b -> (acc shl 8) or (b.toLong() and 0xff) }
+        val mask = if (la.prefixLength == 0) 0L else (0xffffffffL shl (32 - la.prefixLength)) and 0xffffffffL
+        val bc = (ip and mask) or (mask.inv() and 0xffffffffL)
+        return listOf(24, 16, 8, 0).joinToString(".") { ((bc shr it) and 0xff).toString() }
+    }
+
     private fun open(url: String): HttpURLConnection {
         val u = URL(url)
         return (wifi?.openConnection(u) ?: u.openConnection()) as HttpURLConnection

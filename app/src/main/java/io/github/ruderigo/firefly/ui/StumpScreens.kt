@@ -50,7 +50,12 @@ fun StumpsScreen(go: (Route) -> Unit) {
     // The gateway is a Stump only on a Stump's own hotspot; on home Wi-Fi it's the router.
     // So it's asked (/node.json) before it's offered: null while asking, then the answer.
     var gwProbe by remember(gateway) { mutableStateOf<JSONObject?>(null) }
-    LaunchedEffect(gateway) { gateway?.let { gwProbe = Engine.obj("discover_probe", "http://$it") } }
+    LaunchedEffect(gateway) {
+        gateway?.let { gwProbe = Engine.obj("discover_probe", "http://$it") }
+        // Stumps we know that answer on this Wi-Fi (STUMP?): open them here, or follow them
+        // to the address the router gave them since. One broadcast, at most every 20 s.
+        if (gateway != null) Engine.arr("stump_refresh_wifi")
+    }
     val gwStump = gwProbe?.takeIf { it.optBoolean("stump") }
     var url by remember(settings, gwStump) {
         mutableStateOf(gwStump?.optString("base") ?: settings.optString("stump_wifi_default", "http://192.168.4.1"))
@@ -150,10 +155,15 @@ fun StumpsScreen(go: (Route) -> Unit) {
 }
 
 @Composable
-fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
-    var tab by remember(key) { mutableStateOf("room") }
+fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
+    // A Wi-Fi Stump the router moved is found again by its identity: the screen follows it.
+    var key by remember(openedAs) { mutableStateOf(openedAs) }
+    var tab by remember(openedAs) { mutableStateOf("room") }
     val scope = rememberCoroutineScope()
     val view = engineData(JSONObject(), key) { Engine.obj("stump_view", key) }
+    LaunchedEffect(view) {
+        view.optString("moved_to").takeIf { it.isNotBlank() && it != "null" && it != key }?.let { key = it }
+    }
     val mesh = key.startsWith("mesh:")
     // Billboard and files: Wi-Fi only, read once when the node opens (and on Refresh),
     // not on every chat change. A feature the node doesn't offer has no tab.
@@ -211,8 +221,22 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
                 stringResource(R.string.stump_hide) to { Engine.fire("stump_hide", key); back() },
                 stringResource(R.string.stump_remove) to { menuRemove = true }))
         }
-        if (mesh && !view.optBoolean("reachable", true)) NoRadioBanner(view.optString("wifi_alt").takeIf { it.isNotBlank() && it != "null" }) {
-            go(if (it != null) Route.Node(it) else Route.FindStumps)
+        if (mesh && !view.optBoolean("reachable", true)) {
+            val alt = view.optString("wifi_alt").takeIf { it.isNotBlank() && it != "null" }
+            // No radio: if this Stump answers on the Wi-Fi (STUMP?, by its identity), chat there.
+            var looking by remember(key) { mutableStateOf(false) }
+            fun lookOnWifi(thenFind: Boolean) {
+                if (looking) return
+                looking = true
+                scope.launch {
+                    val r = Engine.obj("stump_find_wifi", key.substringAfter(":"))
+                    looking = false
+                    val k = r.optString("key").takeIf { it.isNotBlank() && it != "null" }
+                    if (k != null) go(Route.Node(k)) else if (thenFind) go(Route.FindStumps)
+                }
+            }
+            LaunchedEffect(key, alt) { if (alt == null) lookOnWifi(thenFind = false) }
+            NoRadioBanner(alt, looking) { if (it != null) go(Route.Node(it)) else lookOnWifi(thenFind = true) }
         }
         if (!mesh) UpdateBanner(key, tools)
         if (!mesh) RadioMatch(radio) {
@@ -501,7 +525,7 @@ private fun RadioMatch(radio: JSONObject?, onUse: () -> Unit) {
 
 /** A Stump opened over LoRa with no radio and no other path: nothing can be sent. Say so. */
 @Composable
-private fun NoRadioBanner(wifiKey: String?, openWifi: (String?) -> Unit) {
+private fun NoRadioBanner(wifiKey: String?, looking: Boolean, openWifi: (String?) -> Unit) {
     Row(Modifier.fillMaxWidth().background(Amber.Sidebar).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -511,7 +535,11 @@ private fun NoRadioBanner(wifiKey: String?, openWifi: (String?) -> Unit) {
         }
         Spacer(Modifier.width(8.dp))
         // Its Wi-Fi entry if there is one; otherwise look for it on this network.
-        Button(stringResource(if (wifiKey != null) R.string.open_over_wifi else R.string.find_over_wifi)) { openWifi(wifiKey) }
+        Button(stringResource(when {
+            wifiKey != null -> R.string.open_over_wifi
+            looking -> R.string.find_lan_searching
+            else -> R.string.find_over_wifi
+        }), enabled = wifiKey != null || !looking) { openWifi(wifiKey) }
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))
 }

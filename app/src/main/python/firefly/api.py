@@ -339,6 +339,8 @@ def stump_close(key, forget=False):
 
 def stump_view(key, room=None):
     c = _need()
+    asked = key
+    key = c.resolve(key)
     sess = c.session(key)
     node = c.store.stump_node(key) or {}
     room = room or sess.room
@@ -350,6 +352,8 @@ def stump_view(key, room=None):
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
     node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
     node["offline_reason"] = getattr(sess, "offline_reason", None)     # why the Wi-Fi poll gets nothing
+    node["key"] = key
+    node["moved_to"] = key if key != asked else None      # the screen follows the Stump to its new address
     sess.auth_timed_out()
     node["auth"] = (c.store.stump_node(key) or {}).get("auth", node.get("auth"))
     node["auth_detail"] = (c.store.stump_node(key) or {}).get("auth_detail", node.get("auth_detail"))
@@ -419,7 +423,7 @@ def stump_send_dm(key, nick, text):
 def _wifi_base(key):
     if not str(key).startswith("wifi:"):
         raise ValueError("the billboard and files are Wi-Fi only")
-    return str(key)[5:]
+    return _need().resolve(str(key))[5:]          # where the Stump is now, if it moved
 
 
 def stump_board(key, q=""):
@@ -496,9 +500,36 @@ def discover_probe(base):
 
 
 def discover_lan(own_ip, prefix, skip_json="[]"):
-    """Every Stump on the phone's local network (its /24). Takes a few seconds."""
+    """Every Stump on the phone's local network: the ones that answer STUMP? (Stump
+    1.0.0-beta.21+), those they heard, then the /24 sweep for older ones. A few seconds.
+    Stumps we already know are followed to the address they answered from."""
     from . import discovery
-    return _j(discovery.sweep(_need().http, str(own_ip), int(prefix), skip=json.loads(skip_json or "[]")))
+    c = _need()
+    found = discovery.find_all(c.http, str(own_ip) if own_ip else None, int(prefix or 24))
+    skip = set(json.loads(skip_json or "[]"))
+    found = [f for f in found if f["base"].split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0] not in skip]
+    try:
+        c.refresh_wifi([{"lxmf": f.get("lxmf"), "base": f["base"], "name": f.get("name")} for f in found if f.get("lxmf")])
+    except Exception:
+        pass
+    return _j(found)
+
+
+def stump_refresh_wifi():
+    """Known Stumps answering on this Wi-Fi: opened there, or followed to a new address.
+    Cheap (one broadcast, ~1.5 s); the Stumps tab calls it when shown."""
+    c = _need()
+    now = time.time()
+    if now - getattr(c, "_refreshed_at", 0) < 20:
+        return _j([])
+    c._refreshed_at = now
+    return _j(c.refresh_wifi())
+
+
+def stump_find_wifi(lxmf):
+    """The Wi-Fi entry of this Stump (by identity), found now. -> {"key"} or {"error"}"""
+    key = _need().find_wifi(str(lxmf or "").lower())
+    return _j({"key": key} if key else {"error": "no answer from this Stump on this Wi-Fi"})
 
 
 def discover_ssids(scan_json):
