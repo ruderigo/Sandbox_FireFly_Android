@@ -205,6 +205,7 @@ wait(lambda: w()["room"] == "lounge", 15, "/join: `room` field in the reply move
 api.stump_auth(wkey)
 wait(lambda: w()["auth"] == "ok", 15, "/auth over HTTP -> AUTH-OK, same code path")
 check(w()["auth_detail"] == core.identity.hash.hex(), "same identity on both transports")
+check((w().get("hw") or {}).get("state") == "online", "the node's radio state from the poll (its status light)")
 print("-- plugin commands (!roll) and what ⧗ answers")
 wlines = lambda: [l["body"] for l in w()["lines"]]
 for _ in range(4):

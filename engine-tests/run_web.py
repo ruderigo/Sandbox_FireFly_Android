@@ -122,6 +122,23 @@ check("room aliases: lxmf and lora are lora-mesh, mesh is wifi-mesh", stump_prot
       and stump_proto.same_room("lora", "lora-mesh") and stump_proto.same_room("mesh", "wifi-mesh")
       and not stump_proto.same_room("main", "lora-mesh"))
 
+# A Stump on a computer with its own Heltec may mark #lora-mesh [LoRa] in /rooms.
+r = stump_proto.parse_message("#lora-mesh ·2 [LoRa] LoRa (radio)")[0]
+check("/rooms: a [LoRa] tier is a tier, not part of the topic", r["kind"] == "room" and r["tier"] == "LoRa"
+      and r["topic"] == "LoRa (radio)", r)
+
+# /node.json's radio (Stump 1.0.0-beta.5+) against ours: a mismatched radio never hears anything.
+RADIO_NODE = {"name": "Far", "lxmf": "cd" * 16, "radio": {"frequency": 868_100_000, "bandwidth": 125_000, "sf": 8, "cr": 5}}
+serve_http(PORT + 1, FakeRRC(rns_verify), FakeWeb(), node=RADIO_NODE)
+time.sleep(0.2)
+nr = stump_web.node_radio(http, f"http://127.0.0.1:{PORT + 1}")
+mine = {"frequency": 915_000_000, "bandwidth": 125_000, "spreading_factor": 8, "coding_rate": 5, "tx_power": 7}
+check("node radio read from /node.json", nr == RADIO_NODE["radio"], nr)
+check("...only the frequency differs from ours", stump_web.radio_differences(nr, mine) == ["frequency"])
+check("...'use these' sets frequency, bandwidth, SF, CR (TX power stays ours)", stump_web.radio_patch(nr) ==
+      {"frequency": 868_100_000, "bandwidth": 125_000, "spreading_factor": 8, "coding_rate": 5})
+check("a node without /node.json (or without a radio): nothing to compare", stump_web.node_radio(http, BASE) is None)
+
 url = stump_web.download_url(BASE, "été à Montréal.txt")
 check("download URL percent-encodes UTF-8", "%C3%A9t%C3%A9%20%C3%A0%20Montr%C3%A9al.txt" in url, url)
 st, data, hd = raw("GET", url[len(BASE):])

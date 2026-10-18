@@ -275,3 +275,31 @@ def chain(http, base):
     role = data.get("role") if data.get("role") in ("root", "member") else None
     return {"state": "ok", "enabled": True, "role": role, "below": len(below),
             "parent": up.get("parent") if isinstance(up.get("parent"), str) else None}
+
+
+# ------------------------------------------------------------------ the node's radio
+RADIO_KEYS = (("frequency", "frequency"), ("bandwidth", "bandwidth"), ("sf", "spreading_factor"), ("cr", "coding_rate"))
+
+
+def node_radio(http, base):
+    """/node.json's radio (Stump 1.0.0-beta.5+): {"frequency" Hz, "bandwidth" Hz, "sf", "cr"}, or None
+    (no radio on the node, or an older node)."""
+    data = _get_json(http, base + "/node.json")
+    r = data.get("radio") if data.get("state") == "ok" else None
+    if not isinstance(r, dict):
+        return None
+    try:
+        return {k: int(r[k]) for k, _ in RADIO_KEYS}
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def radio_differences(node, mine):
+    """Which of the node's settings differ from ours (FireFly's names). A mismatched radio
+    doesn't error; it just never hears anything."""
+    return [ours for theirs, ours in RADIO_KEYS if int(mine.get(ours) or 0) != int(node[theirs])]
+
+
+def radio_patch(node):
+    """FireFly settings for the node's radio (TX power stays ours: it's about range, not matching)."""
+    return {ours: int(node[theirs]) for theirs, ours in RADIO_KEYS}

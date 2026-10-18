@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import io.github.ruderigo.firefly.R
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import io.github.ruderigo.firefly.audio.VoiceBubble
 import io.github.ruderigo.firefly.audio.VoiceEncoder
 import io.github.ruderigo.firefly.audio.Opus
@@ -118,6 +119,7 @@ fun StumpsScreen(go: (Route) -> Unit) {
 @Composable
 fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
     var tab by remember(key) { mutableStateOf("room") }
+    val scope = rememberCoroutineScope()
     val view = engineData(JSONObject(), key) { Engine.obj("stump_view", key) }
     val mesh = key.startsWith("mesh:")
     // Billboard and files: Wi-Fi only, read once when the node opens (and on Refresh),
@@ -127,6 +129,7 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
     var plugins by remember(key) { mutableStateOf<JSONObject?>(null) }     // its !commands
     var tools by remember(key) { mutableStateOf<JSONObject?>(null) }       // a newer FireFly on its card
     var chain by remember(key) { mutableStateOf<JSONObject?>(null) }       // its place in a chain of Stumps
+    var radio by remember(key) { mutableStateOf<JSONObject?>(null) }       // its radio settings beside ours
     val version = myVersion(LocalContext.current)
     LaunchedEffect(key) {
         if (!mesh) {
@@ -135,6 +138,7 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
             plugins = Engine.obj("stump_plugins", key)
             tools = Engine.obj("stump_tools", key, version)
             chain = Engine.obj("stump_chain", key)
+            radio = Engine.obj("stump_radio", key)
         }
     }
     val auth = view.optString("auth", "none")
@@ -148,6 +152,16 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
                 if (view.optInt("online") == 0) stringResource(R.string.unreachable) else null,
                 chain?.takeIf { it.optBoolean("enabled") }?.let {
                     stringResource(if (it.optString("role") == "root") R.string.chain_root else R.string.chain_member)
+                },
+                // The node's own radio, from its poll (Stump 1.0.0-beta.5+): its status light.
+                view.optJSONObject("hw")?.optString("state")?.let { st ->
+                    when (st) {
+                        "online" -> stringResource(R.string.node_radio_online)
+                        "connecting" -> stringResource(R.string.node_radio_connecting)
+                        "error" -> stringResource(R.string.node_radio_error)
+                        "none" -> stringResource(R.string.node_radio_none)
+                        else -> null
+                    }
                 },
             ).joinToString("  "), back) {
             var menuRemove by remember { mutableStateOf(false) }
@@ -163,6 +177,12 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
                 stringResource(R.string.stump_remove) to { menuRemove = true }))
         }
         if (!mesh) UpdateBanner(key, tools)
+        if (!mesh) RadioMatch(radio) {
+            scope.launch {
+                withContext(Dispatchers.IO) { Engine.call("stump_use_radio", key) }
+                radio = Engine.obj("stump_radio", key)
+            }
+        }
         view.optJSONObject("propagation")?.takeIf { it.optBoolean("enabled", false) }?.let { pn ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.node_keeps_messages), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
@@ -405,3 +425,30 @@ private fun StumpActions(name: String, onDismiss: () -> Unit, onHide: () -> Unit
 private fun ConfirmRemoveStump(name: String, onDismiss: () -> Unit, onConfirm: () -> Unit) =
     ConfirmDialog(stringResource(R.string.stump_remove_title, name), stringResource(R.string.stump_remove_confirm),
         stringResource(R.string.stump_remove), onConfirm = onConfirm, onDismiss = onDismiss)
+
+
+/**
+ * Every node of a mesh needs the same radio settings: a mismatched radio doesn't error, it
+ * just never hears anything. When the node's (/node.json) differ from ours, say so and offer
+ * to use them. TX power stays ours.
+ */
+@Composable
+private fun RadioMatch(radio: JSONObject?, onUse: () -> Unit) {
+    val node = radio?.optJSONObject("node") ?: return
+    val differs = radio.optJSONArray("differs")?.strings() ?: emptyList()
+    if (differs.isEmpty()) return
+    val f = node.optLong("frequency") / 1_000_000.0
+    val bw = node.optLong("bandwidth") / 1000.0
+    val desc = "%.3f MHz · %s kHz · SF%d · CR 4/%d".format(f, if (bw % 1.0 == 0.0) "%.0f".format(bw) else "%.1f".format(bw),
+        node.optInt("sf"), node.optInt("cr"))
+    Row(Modifier.fillMaxWidth().background(Amber.Sidebar).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.radio_mismatch), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Error))
+            Text(stringResource(R.string.radio_mismatch_detail, desc), style = MaterialTheme.typography.labelSmall)
+        }
+        Spacer(Modifier.width(8.dp))
+        Button(stringResource(R.string.radio_use_these), onClick = onUse)
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))
+}

@@ -147,7 +147,7 @@ class FakeRRC:
                 out = []
                 for r in sorted(self.rooms):
                     count = sum(1 for x in self.users.values() if x["room"] == r)
-                    tier = f" [{self.tiers[r]}]" if r in self.tiers else ""
+                    tier = f" [{self.tiers[r]}]" if r in self.tiers else (" [LoRa]" if r == MESH_ROOM and os.environ.get("FAKE_STUMP_LORA_TIER") == "1" else "")
                     out.append(f"#{r} ·{count}{tier} {self.topics[r]}".rstrip())
                 return out, None
             if cmd == "/names":
@@ -233,7 +233,8 @@ class FakeRRC:
             return {"room": u["room"], "nick": u["nick"], "topic": self.topics[u["room"]],
                     "rooms": sorted(self.rooms), "messages": msgs, "dms": dms,
                     "users": [x["nick"] for x in self.users.values() if x["room"] == u["room"]], "stumps": [],
-                    "node": {"name": "LaBuche Test", "lxmf": self.node_lxmf}}
+                    "node": {"name": "LaBuche Test", "lxmf": self.node_lxmf},
+                    "hw": {"state": "online", "title": "USB /dev/ttyUSB0 · Heltec V3 · RNode 1.82"}}
 
 
 def rns_verify(pub_hex, sig_hex, nonce_hex):

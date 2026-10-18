@@ -1,6 +1,6 @@
 # FireFly client quickstart: interoperating with FireFly
 
-FireFly for Android 0.5.0-beta.5 · October 2026 (Stump 1.0.0-beta.4) (Stump 1.0.0-beta.2)
+FireFly for Android 0.5.0-beta.6 · October 2026 (Stump 1.0.0-beta.19) (Stump 1.0.0-beta.2)
 
 A client interoperates with FireFly if it speaks standard LXMF and reads and writes LXMF's audio field the way this guide describes. Nothing here is FireFly-only: it's LXMF, Reticulum, and the Stump node's own protocol.
 
@@ -258,6 +258,12 @@ FireFly's Find Stumps screen probes addresses (the Wi-Fi gateway, each address o
 How steady a link is: five small GETs of the same endpoint, one after another; the median time and the count lost give 0–3 bars (3: none lost and under 150 ms; 2: at most one in five lost and under 400 ms; 1: under 60 % lost). Wi-Fi signal: ≥ −60 dBm 3 bars, ≥ −72 dBm 2, ≥ −85 dBm 1. LoRa: SNR of the last packet heard, ≥ 5 dB 3 bars, ≥ −3 dB 2, ≥ −10 dB 1 (SF8 decodes to about −10 dB).
 
 The same Stump reached over LoRa and Wi-Fi is matched by the `node.lxmf` address in `/rrc/poll` (or `/node.json`), so a client can show it once.
+
+## Matching the Stump's radio
+
+Every node of a mesh needs the same radio settings, and a mismatch shows no error: nothing is ever heard. Since Stump 1.0.0-beta.5, `GET /node.json` has `"radio": {"frequency", "bandwidth", "sf", "cr"}` (Hz, Hz, 7–12, 5–8 for 4/5–4/8), present only when the node has a radio. FireFly compares it with its own settings when you open a Stump over Wi-Fi and offers to use them (TX power is left alone). The poll's `hw` (`{"state": "none"|"online"|"connecting"|"error", "title"}`) is the node's radio status light.
+
+Two things not to do over LXMF: don't title your own messages to a Stump `#lora-mesh` or `#wifi-mesh`, and don't start a line with `[DM>`. A Stump takes either as a sign the sender is another Stump.
 
 ## Blocking and deleting
 

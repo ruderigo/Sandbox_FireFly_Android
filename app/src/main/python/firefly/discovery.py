@@ -86,6 +86,7 @@ def identify(http, base, timeout_ms=PROBE_TIMEOUT_MS):
                 "lxmf": _hash(data.get("lxmf")), "ap_ip": data.get("ap_ip") if isinstance(data.get("ap_ip"), str) else None,
                 "chain": _chain_summary(data.get("chain")),        # null unless chained, else the /chain.json object
                 "features": [str(f) for f in feats][:12] if isinstance(feats, list) else None,
+                "radio": data.get("radio") if isinstance(data.get("radio"), dict) else None,
                 "first_ms": ms}
     status, data, ms2 = _get(http, base + "/chain.json", timeout_ms)
     if isinstance(data, dict) and "enabled" in data:

@@ -264,6 +264,7 @@ class StumpSession:
         self.last_command_at = 0.0          # our last /command or !plugin line (⧗ can answer either)
         self.last_sent = None               # the last thing we sent: {"kind", "id", "text", "at"} (what a ⧗ refused)
         self._reply_to = None               # the line an HTTP reply answers, while it's handled
+        self.hw = None                      # the node's radio state from the poll (Stump 1.0.0-beta.5+)
         self._save(name=name or node.get("name") or pipe.address, room=self.room, active=1,
                    last_seen=time.time())
         pipe.start(self)
@@ -436,6 +437,9 @@ class StumpSession:
             self.nick = data["nick"]
             fields["nick"] = self.nick
         fields["topic"] = data.get("topic") or ""
+        hw = data.get("hw")
+        if isinstance(hw, dict) and hw.get("state") in ("none", "online", "connecting", "error"):
+            self.hw = {"state": hw["state"], "title": str(hw.get("title") or "")[:300]}
         node_info = data.get("node")
         if isinstance(node_info, dict) and node_info.get("name"):
             fields["name"] = str(node_info["name"])[:64]     # the node's own name, as on LoRa

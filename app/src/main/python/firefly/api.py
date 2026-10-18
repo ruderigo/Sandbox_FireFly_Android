@@ -327,6 +327,7 @@ def stump_view(key, room=None):
     node["viewing"] = room
     node["threads"] = c.store.dm_threads(key)
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
+    node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
     return _j(node)
 
 
@@ -419,6 +420,27 @@ def stump_tools(key, my_version):
 def stump_chain(key):
     from . import stump_web
     return _j(stump_web.chain(_need().http, _wifi_base(key)))
+
+
+def stump_radio(key):
+    """The node's radio settings beside ours: {"node": {...} | None, "differs": [...]}."""
+    from . import stump_web
+    c = _need()
+    node = stump_web.node_radio(c.http, _wifi_base(key))
+    return _j({"node": node, "differs": stump_web.radio_differences(node, c.settings["radio"]) if node else []})
+
+
+def stump_use_radio(key):
+    """Set our radio to the node's (frequency, bandwidth, SF, CR) and retune now."""
+    from . import stump_web
+    c = _need()
+    node = stump_web.node_radio(c.http, _wifi_base(key))
+    if not node:
+        return False
+    c.settings.update({"radio": stump_web.radio_patch(node)})
+    if c.radio:
+        c.radio.request_apply(0.2)
+    return True
 
 
 def stump_download_url(key, name):

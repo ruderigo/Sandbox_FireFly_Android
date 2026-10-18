@@ -83,7 +83,9 @@ def beacon_hash_for(identity):
 # ---------------------------------------------------------------- line protocol
 _DM = re.compile(r"^\[DM\] <([^>]+)>: (.*)$", re.S)
 _ROOM_MSG = re.compile(r"^<([^>]+)> (.*)$", re.S)
-_ROOM_LIST = re.compile(r"^#(\S+) ·(\d+)\s*(\[(minted|hybrid)\])?\s*(.*)$")
+# "#main ·3 topic", "#vip ·1 [minted] topic"; a Stump on a computer with its own Heltec may
+# mark #lora-mesh "[LoRa]" (only LoRa people and whom its owner invites). Any [word] is a tier.
+_ROOM_LIST = re.compile(r"^#(\S+) ·(\d+)\s*(\[([A-Za-z-]+)\])?\s*(.*)$")
 
 
 def parse_line(line):

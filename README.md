@@ -8,10 +8,29 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.5: beta, following the Stump beta (1.0.0-beta.4)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.6: beta, following the Stump beta (1.0.0-beta.19)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
+
+### 0.5.0-beta.6: following Stump 1.0.0-beta.19
+Checked against the beta.19 CLIENT_QUICKSTART and `barkeep.py`.
+- **Radio settings checked against the Stump's.** A Stump's `/node.json`
+  now gives its radio (frequency, bandwidth, SF, CR). When FireFly's
+  differ, the node screen says so in red, with the Stump's settings and
+  **Use these** (TX power stays yours). A mismatched radio doesn't error:
+  it just never hears anything, so this was the hardest thing to notice.
+- **The node's radio state** (from the poll's `hw`) shows under its name:
+  on, connecting, problem, or no radio.
+- **`[LoRa]` rooms:** a Stump on a computer with its own Heltec may mark
+  `#lora-mesh` `[LoRa]` in `/rooms`; it's read as the room's tier now,
+  not glued to its topic.
+- Already right, checked: `#lora-mesh` shared between Stumps (lines as
+  `nick@thatstump`); FireFly never titles its messages `#lora-mesh` or
+  `#wifi-mesh` (that would mark it a Stump); its HTTP client keeps no
+  cookies, so a Stump still knows it by its address and `/auth` works as
+  before; in `hybrid`, FireFly over LoRa now counts as verified by its
+  signature alone, because it announces itself.
 
 ### 0.5.0-beta.5: following Stump 1.0.0-beta.4
 Checked against the beta.4 CLIENT_QUICKSTART and `rrc.py`. Works with

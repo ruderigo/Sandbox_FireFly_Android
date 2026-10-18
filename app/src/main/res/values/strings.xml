@@ -318,4 +318,11 @@
     <string name="cat_document">documents</string>
     <string name="cat_image">pictures</string>
     <string name="cat_other">other</string>
+    <string name="node_radio_online">its radio: on</string>
+    <string name="node_radio_connecting">its radio: connecting</string>
+    <string name="node_radio_error">its radio: problem</string>
+    <string name="node_radio_none">no radio</string>
+    <string name="radio_mismatch">Your radio settings differ from this Stump\'s</string>
+    <string name="radio_mismatch_detail">It uses %1$s. With different settings, LoRa never hears it.</string>
+    <string name="radio_use_these">Use these</string>
 </resources>
