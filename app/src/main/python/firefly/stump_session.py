@@ -654,6 +654,8 @@ class StumpSession:
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "unknown_command":
             return self.store.add_line(self.key, self.room, "reply", p["text"])
+        if k == "needs_auth":                         # not "auth_…": those are the /auth tokens
+            return self._needs_auth(p["text"])
         if k == "slow":
             # ⧗ is the node saying "slow down": lines too fast (3 at once, then one every 2 s),
             # too many voice notes, plugin commands or wrong passwords. It names nothing: it
@@ -760,6 +762,28 @@ class StumpSession:
                 self.store.set_line_state(line_id, "failed")
             return None
         return self.store.add_line(self.key, self.room, "reply", text)      # a command: show the node's line
+
+    def _needs_auth(self, text):
+        """Hybrid (Stump 1.0.0-beta.21): the line we just sent needs a verified identity
+        (a room other than #main, or a private message). Over Wi-Fi we know which line:
+        it's kept, marked "verify first", and a tap sends it again once verified."""
+        sent = getattr(self, "_reply_to", None)
+        if sent is None or sent.startswith(("/", "!")) and not sent.lower().startswith(DM_COMMANDS):
+            return self.store.add_line(self.key, self.room, "reply", text)
+        if sent.lower().startswith(DM_COMMANDS):
+            parts = sent.split(" ", 2)
+            nick = parts[1].lstrip("~") if len(parts) > 1 else ""
+            body = parts[2] if len(parts) > 2 else ""
+            for dm in reversed(self.store.pending_dms(self.key)):
+                if dm["nick"].lower() == nick.lower() and (dm["body"] == body or dm.get("audio_mode") is not None):
+                    self.voice_sent_at.pop(dm["id"], None)
+                    self.store.update_dm(dm["id"], state="failed",
+                                         reason="this Stump takes private messages from verified people: tap ‘Verify me’, then send again")
+                    return None
+            return self.store.add_line(self.key, self.room, "reply", text)
+        line_id = self.store.add_line(self.key, self.room, "msg", sent, nick=self.my_nick(), mine=True)
+        self.store.set_line_state(line_id, "auth")
+        return None
 
     def _refused(self, sent, text):
         """The node refused this exact line with ⧗: it wasn't sent."""

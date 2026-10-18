@@ -336,4 +336,5 @@
     <string name="line_not_sent_net">no enviado (el Stump no respondió): toca para reenviar</string>
     <string name="find_by_heard">oído por otro Stump</string>
     <string name="find_by_sweep">Stump más antiguo</string>
+    <string name="line_not_sent_auth">no enviado: solo las personas verificadas escriben en esta sala. Toca «Verificarme» y luego aquí para reenviar</string>
 </resources>

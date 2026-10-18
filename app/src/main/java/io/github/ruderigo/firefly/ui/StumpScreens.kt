@@ -313,7 +313,7 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
         if (lines.isEmpty()) item { Empty(stringResource(if (mesh) R.string.room_empty_mesh else R.string.room_empty)) }
         items(lines, key = { it.optLong("id") }) { l ->
             // A line the node refused (⧗: too fast) wasn't sent: a tap sends it again.
-            val failed = l.optInt("mine") == 1 && l.optString("state") in listOf("failed", "error")
+            val failed = l.optInt("mine") == 1 && l.optString("state") in listOf("failed", "error", "auth")
             Box(if (failed) Modifier.clickable { Engine.fire("stump_post", key, l.optString("body")) } else Modifier) {
                 RoomLine(l)
             }
@@ -333,9 +333,10 @@ private fun RoomLine(l: JSONObject) {
     val notSent = stringResource(when (l.optString("local_state").takeIf { !l.isNull("local_state") }) {
         "failed" -> R.string.line_not_sent
         "error" -> R.string.line_not_sent_net
+        "auth" -> R.string.line_not_sent_auth
         else -> R.string.line_not_delivered
     })
-    val lineFailed = l.optString("state") in listOf("failed", "error")
+    val lineFailed = l.optString("state") in listOf("failed", "error", "auth")
     val kind = l.optString("kind")
     val nick = l.optString("nick").takeIf { it.isNotBlank() && it != "null" }
     val body = l.optString("body")

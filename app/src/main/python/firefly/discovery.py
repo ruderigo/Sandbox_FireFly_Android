@@ -298,7 +298,7 @@ def card_from(data, sender=None):
 def _reachable(http, card):
     """The first of a card's candidate addresses that answers as this Stump."""
     for b in card["candidates"][:4]:
-        info = identify(http, b, timeout_ms=800)
+        info = identify(http, b)
         if info and (not card["lxmf"] or info.get("lxmf") in (None, card["lxmf"])):
             return info["base"]
     return None
@@ -323,7 +323,8 @@ def ask(http, targets=("broadcast",), wait_ms=ASK_WAIT_MS):
         if not c or not c["base"]:
             continue
         if not c["here"] and len(c["candidates"]) > 1:
-            c["base"] = _reachable(http, c) or c["base"]
+            # None answering (a busy moment): its own first address, not a guess of ours.
+            c["base"] = _reachable(http, c) or (_base_of(c["http"][0]) if c["http"] else c["base"])
         k = c["lxmf"] or c["base"]
         if k in seen:
             continue

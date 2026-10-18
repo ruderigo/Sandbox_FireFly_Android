@@ -47,6 +47,9 @@ class FakeRRC:
         self.nonces = {}
         self.plugin_calls = {}          # key -> recent !command times (the tavern plugin's flood guard)
         self.node_lxmf = "00" * 16      # what the poll's node field gives as this node's LXMF address
+        # Stump 1.0.0-beta.21 access modes (stumpid): "hybrid" lets anyone write only in #main
+        # before /auth; a line elsewhere, or a private message, gets AUTH_REQUIRED.
+        self.auth_mode = os.environ.get("FAKE_STUMP_MODE", "open")
 
     def _take_token(self, key):
         """Lines others see: 3 at once, then one every 2 s (Stump 1.0.0-beta.3's guard)."""
@@ -93,6 +96,10 @@ class FakeRRC:
         with self.lock:
             u = self.users[key]
             me, room = u["nick"], u["room"]
+            low = line.lower()
+            if self.auth_mode == "hybrid" and key not in self.verified and (
+                    (not line.startswith("/") and room != "main") or low.startswith(("/msg ", "/m ", "/w "))):
+                return ["auth required for that -- send /auth to verify your identity"], None
             if not line.startswith("/") and not self._take_token(key):
                 return ["⧗ — slow down: wait a moment before sending again"], None      # the line wasn't sent
             if line.startswith("!") and line[1:].split()[:1] and line[1:].split()[0].lower() in ("roll", "8ball", "seen"):

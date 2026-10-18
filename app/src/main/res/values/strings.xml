@@ -336,4 +336,5 @@
     <string name="line_not_sent_net">not sent (the Stump didn\'t answer): tap to send again</string>
     <string name="find_by_heard">heard by another Stump</string>
     <string name="find_by_sweep">older Stump</string>
+    <string name="line_not_sent_auth">not sent: only verified people write in this room. Tap \"Verify me\", then tap here to send again</string>
 </resources>

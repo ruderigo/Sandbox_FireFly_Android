@@ -99,6 +99,16 @@ _ROOM_MSG = re.compile(r"^<([^>]+)> (.*)$", re.S)
 _ROOM_LIST = re.compile(r"^#(\S+) ·(\d+)\s*(\[([A-Za-z-]+)\])?\s*(.*)$")
 
 
+# Stump 1.0.0-beta.21, hybrid mode: anyone reads every room and writes in #main; a line
+# elsewhere (or a private message) before /auth gets this, in the visitor's language
+# (stumpid's "auth_required_generic"). It's sentence text, not a token: matched whole.
+AUTH_REQUIRED = (
+    "auth required for that -- send /auth to verify your identity",
+    "identité vérifiée requise — envoie /auth pour te vérifier",
+    "se requiere identidad verificada — envía /auth para verificarte",
+)
+
+
 def parse_line(line):
     """Classify one line from a Stump node. Returns a dict with at least 'kind'."""
     line = line.rstrip("\r")
@@ -129,6 +139,8 @@ def parse_line(line):
         parts = line[3:].split()
         return {"kind": "tier_refused", "room": parts[0] if parts else "",
                 "tier": parts[1] if len(parts) > 1 else "", "text": line}
+    if line.strip() in AUTH_REQUIRED:
+        return {"kind": "needs_auth", "text": line}  # this needs a verified identity: /auth
     if line.startswith("⧗"):
         return {"kind": "slow", "text": line}           # slow down: voice notes, or plugin commands
     if line.startswith("⊖ "):

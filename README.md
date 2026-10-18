@@ -38,6 +38,13 @@ found on the Wi-Fi by asking:
   that Stump; and a saved Stump keeps its name ("macOS") when it is
   reopened or followed, instead of showing "Stump Wi-Fi (address)" until
   its first poll.
+- **Hybrid, as Stump 1.0.0-beta.21 now means it** (everyone reads every
+  room and writes in `#main`; writing elsewhere takes Verify): a line
+  written elsewhere before Verify is kept, marked "not sent: only verified
+  people write in this room", and a tap sends it again once verified; a
+  private message fails with the same reason. In a closed (`mandatory`)
+  Stump the room stays empty with the Stump's topic saying why, and fills
+  in after Verify.
 
 ### 0.5.0-beta.8: home Wi-Fi is not a Stump's hotspot (from the Stump team's notes)
 On home Wi-Fi with no radio, the "Stump over Wi-Fi" box offered the
