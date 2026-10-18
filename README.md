@@ -8,10 +8,30 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.6: beta, following the Stump beta (1.0.0-beta.19)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.7: beta, following the Stump beta (1.0.0-beta.19)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
+
+### 0.5.0-beta.7: a Stump that moved, a phone with no radio (field fix)
+Reported with a Stump on a Mac and a phone without its RNode: the Stump
+showed "LoRa + Wi-Fi", but `/join` did nothing, Verify never finished,
+and every line came back "not sent (too fast)". The router had given the
+Mac a new address, so the saved Wi-Fi entry was offline, and the entry
+fell back to its LoRa side, which had no radio to send with.
+- **A Stump found at a new address replaces its old entry** (matched by
+  the LXMF address its poll gives).
+- **The merged entry opens what can reach the Stump:** Wi-Fi while it
+  answers, LoRa only when the radio (or another path) can carry it, else
+  Wi-Fi.
+- **A LoRa side with nothing to carry it says so** ("No radio: nothing
+  can be sent over LoRa"), with **Open over Wi-Fi** when the Stump has a
+  Wi-Fi entry.
+- **Verify** fails at once over LoRa with no way to the Stump, and gives
+  up after its window if nobody answers, instead of "verifying" forever.
+- **Failed lines say why:** "not sent (too fast)" only when the node
+  refused it (`⧗`); "not delivered" when LoRa couldn't deliver it.
+- `/rooms`: `[LoRa]` read where `rrc.py` puts it, after the topic.
 
 ### 0.5.0-beta.6: following Stump 1.0.0-beta.19
 Checked against the beta.19 CLIENT_QUICKSTART and `barkeep.py`.
@@ -485,6 +505,7 @@ Run from the repository root with `pip install rns==1.5.5 lxmf==1.2.0`:
 | `python3 engine-tests/run_stamps.py` | FireFly's stamp search through LXMF's own Android entry point: valid propagation and delivery stamps at costs 8-16 by LXMF's validator, timing, and cancellation the way LXMF cancels. |
 | `python3 engine-tests/run_propagation.py` | A real upstream LXMF propagation node on a Stump's identity (stamp cost 16, 2 KB limit). Found without its announce; stamps with multiprocessing unavailable; an offline friend and a never-online contact collect by sync; no-path messages go to the node at once; over-limit refused; multi-round sync with no duplicates; Stump chat and "off" never use the node; pin and automatic choice. |
 | (also in run_stump / run_air) | Hide keeps history and stays hidden while beaconing; remove deletes everything and a node on the air returns empty; deleting a conversation removes messages and voice notes and a new one starts normally. |
+| `python3 engine-tests/run_reach.py` | The Oct 18 field report: no radio, a Stump's saved Wi-Fi address gone stale. The merged entry doesn't open LoRa, the LoRa side offers Wi-Fi, Verify fails at once, and the Stump found at its new address replaces the old entry. |
 | `python3 engine-tests/run_discovery.py` | Five fake Stumps and a plain web server on loopback addresses (port 80, run as root): a sweep of the /24 finds exactly the Stumps in about a second, reads `/node.json` in the shape barkeep.py builds (nulls included), falls back to `/chain.json` when it's an HTML home page and to `/files.json` on older nodes, ranks the slow one last, and never polls the chat. Plus subnet sizes, bars and hotspot names. |
 | `python3 engine-tests/run_web.py` | Billboard, file shelf, plugins, apps and chain against the fake node, as a current node (JSON answers: 201/400/507 posts; upload name, balance and error tokens; percent-encoded and Latin-1 names; `/plugins.json`, `/tools.json` and version order; `/chain.json`; beacons with extra fields) and as an older one (`FAKE_STUMP_OLD=1`: posting proven by refetch, a dropped post detected, 80/600 limits, `+` `$` and line breaks intact, UTF-8 download names, a UTF-8 `X-Filename` written on a raw socket stored exactly (with the node's filename rules), the node's 400/503/507 answers, and features switched off reading as "off"). |
 | `FAKE_STUMP_OLD=1 python3 engine-tests/run_stump.py` | The same against a node from before Stump 1.0.0-beta.4: `#lxmf`, no line limits. |

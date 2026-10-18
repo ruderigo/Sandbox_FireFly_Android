@@ -382,6 +382,10 @@ class StumpSession:
         return dm_id
 
     def start_auth(self):
+        if self.pipe.kind == MESH and not self.core.can_reach(self.pipe.address):
+            # No radio and no other way to this Stump: the challenge could never arrive.
+            self._save(auth="failed", auth_detail="no radio, and no other way to reach this Stump")
+            return False
         with self.lock:
             if self.auth and self.auth.busy and time.time() - self.auth.started < stump.AUTH_WINDOW_S + 30:
                 return False
@@ -390,6 +394,13 @@ class StumpSession:
         self._save(auth="waiting", auth_detail="")
         self.pipe.send(line, control=True)
         return True
+
+    def auth_timed_out(self):
+        """A verification nobody answered (out of reach): say so instead of waiting forever."""
+        with self.lock:
+            if self.auth and self.auth.busy and time.time() - self.auth.started > stump.AUTH_WINDOW_S + 30:
+                self.auth = None
+                self._save(auth="failed", auth_detail="no answer from the node")
 
     def my_nick(self):
         if self.nick:
@@ -445,6 +456,10 @@ class StumpSession:
             fields["name"] = str(node_info["name"])[:64]     # the node's own name, as on LoRa
         if isinstance(node_info, dict) and _is_hash(node_info.get("lxmf")):
             fields["lxmf"] = node_info["lxmf"].lower()        # matches this node's LoRa entry
+            if fields["lxmf"] != (self.store.stump_node(self.key) or {}).get("lxmf"):
+                # The same Stump at a new address (a router hands out another one): this
+                # entry replaces the old one, which would only ever be offline now.
+                self.core.retire_old_wifi(fields["lxmf"], keep=self.key)
         node = self.store.stump_node(self.key) or {}
         known = {r["name"]: r for r in node.get("rooms", [])}
         fields["rooms"] = [known.get(n, {"name": n}) for n in data.get("rooms") or []]

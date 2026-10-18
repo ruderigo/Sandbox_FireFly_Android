@@ -264,8 +264,12 @@ def stump_nodes():
     out = []
     for g in order:
         members = groups[g]
+        # Open first what can reach the Stump now: Wi-Fi while it answers, else LoRa if the
+        # radio (or another path) can carry it, else Wi-Fi anyway (it may answer again).
+        reach = {r["key"]: c.can_reach(r["address"]) for r in members if r["transport"] == "mesh"}
         members.sort(key=lambda r: (0 if r["transport"] == "wifi" and r.get("online") else
-                                    1 if r["transport"] == "mesh" else 2))
+                                    1 if r["transport"] == "mesh" and reach.get(r["key"]) else
+                                    2 if r["transport"] == "wifi" else 3))
         first = dict(members[0])
         first["others"] = members[1:]
         first["transports"] = sorted({m["transport"] for m in members})
@@ -328,6 +332,14 @@ def stump_view(key, room=None):
     node["threads"] = c.store.dm_threads(key)
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
     node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
+    sess.auth_timed_out()
+    node["auth"] = (c.store.stump_node(key) or {}).get("auth", node.get("auth"))
+    node["auth_detail"] = (c.store.stump_node(key) or {}).get("auth_detail", node.get("auth_detail"))
+    if key.startswith("mesh:"):
+        # Over LoRa with nothing to carry it: offer this Stump's Wi-Fi entry instead.
+        node["reachable"] = c.can_reach(node["address"])
+        node["wifi_alt"] = next((n["key"] for n in c.store.stump_nodes()
+                                 if n["transport"] == "wifi" and n.get("lxmf") == node["address"]), None)
     return _j(node)
 
 

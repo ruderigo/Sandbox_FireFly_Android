@@ -325,4 +325,9 @@
     <string name="radio_mismatch">Vos réglages radio diffèrent de ceux de ce Stump</string>
     <string name="radio_mismatch_detail">Il utilise %1$s. Avec d\'autres réglages, LoRa ne l\'entend jamais.</string>
     <string name="radio_use_these">Les utiliser</string>
+    <string name="line_not_delivered">non remis : touchez pour renvoyer</string>
+    <string name="no_radio_title">Pas de radio : rien ne part en LoRa</string>
+    <string name="no_radio_text">Connectez un RNode (onglet Réseau), ou rejoignez ce Stump par son Wi-Fi.</string>
+    <string name="no_radio_wifi">Ce Stump est aussi joignable en Wi-Fi.</string>
+    <string name="open_over_wifi">Ouvrir en Wi-Fi</string>
 </resources>

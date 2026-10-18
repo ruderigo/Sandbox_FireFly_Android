@@ -685,6 +685,28 @@ class Core:
                 self.sessions[key] = sess
             return sess
 
+    def retire_old_wifi(self, lxmf, keep):
+        """Other Wi-Fi entries of the Stump with this LXMF address are its old addresses."""
+        for n in self.store.stump_nodes():
+            if n["transport"] == "wifi" and n["key"] != keep and (n.get("lxmf") or "") == lxmf:
+                self.close_stump(n["key"])
+                self.store.upsert_stump_node(n["key"], "wifi", n["address"], active=0)
+
+    def radio_online(self):
+        try:
+            return bool(self.radio) and self.radio.snapshot().get("state") == "online"
+        except Exception:
+            return False
+
+    def can_reach(self, peer_hex):
+        """Something can carry a message there: the radio, or a known path (Wi-Fi, TCP)."""
+        if self.radio_online():
+            return True
+        try:
+            return RNS.Transport.has_path(bytes.fromhex(peer_hex))
+        except Exception:
+            return False
+
     def session(self, key):
         if key in self.sessions:
             return self.sessions[key]

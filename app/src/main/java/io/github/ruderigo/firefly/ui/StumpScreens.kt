@@ -176,6 +176,9 @@ fun NodeScreen(key: String, back: () -> Unit, go: (Route) -> Unit) {
                 stringResource(R.string.stump_hide) to { Engine.fire("stump_hide", key); back() },
                 stringResource(R.string.stump_remove) to { menuRemove = true }))
         }
+        if (mesh && !view.optBoolean("reachable", true)) NoRadioBanner(view.optString("wifi_alt").takeIf { it.isNotBlank() && it != "null" }) {
+            go(Route.Node(it))
+        }
         if (!mesh) UpdateBanner(key, tools)
         if (!mesh) RadioMatch(radio) {
             scope.launch {
@@ -266,7 +269,9 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
 /** One RRC line, coloured by meaning like the node's own web chat. */
 @Composable
 private fun RoomLine(l: JSONObject) {
-    val notSent = stringResource(R.string.line_not_sent)
+    // Refused by the node (⧗, too fast) or never delivered over LoRa: two different reasons.
+    val notSent = stringResource(if (!l.isNull("local_state") && l.optString("local_state") == "failed")
+        R.string.line_not_sent else R.string.line_not_delivered)
     val kind = l.optString("kind")
     val nick = l.optString("nick").takeIf { it.isNotBlank() && it != "null" }
     val body = l.optString("body")
@@ -449,6 +454,25 @@ private fun RadioMatch(radio: JSONObject?, onUse: () -> Unit) {
         }
         Spacer(Modifier.width(8.dp))
         Button(stringResource(R.string.radio_use_these), onClick = onUse)
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))
+}
+
+
+/** A Stump opened over LoRa with no radio and no other path: nothing can be sent. Say so. */
+@Composable
+private fun NoRadioBanner(wifiKey: String?, openWifi: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().background(Amber.Sidebar).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.no_radio_title), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Error))
+            Text(stringResource(if (wifiKey != null) R.string.no_radio_wifi else R.string.no_radio_text),
+                style = MaterialTheme.typography.labelSmall)
+        }
+        if (wifiKey != null) {
+            Spacer(Modifier.width(8.dp))
+            Button(stringResource(R.string.open_over_wifi)) { openWifi(wifiKey) }
+        }
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))
 }

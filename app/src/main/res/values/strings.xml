@@ -325,4 +325,9 @@
     <string name="radio_mismatch">Your radio settings differ from this Stump\'s</string>
     <string name="radio_mismatch_detail">It uses %1$s. With different settings, LoRa never hears it.</string>
     <string name="radio_use_these">Use these</string>
+    <string name="line_not_delivered">not delivered: tap to send again</string>
+    <string name="no_radio_title">No radio: nothing can be sent over LoRa</string>
+    <string name="no_radio_text">Connect an RNode (Network tab), or reach this Stump over its Wi-Fi.</string>
+    <string name="no_radio_wifi">This Stump is also reachable over Wi-Fi.</string>
+    <string name="open_over_wifi">Open over Wi-Fi</string>
 </resources>
