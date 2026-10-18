@@ -125,10 +125,13 @@ def parse_line(line):
     if line.startswith("* "):
         nick, _, text = line[2:].partition(" ")
         return {"kind": "action", "nick": nick, "text": text}
+    lora_locked = line.rstrip().endswith("[LoRa]")             # rrc.py appends it after the topic
+    if lora_locked:
+        line = line.rstrip()[:-len("[LoRa]")].rstrip()
     m = _ROOM_LIST.match(line)
     if m:
         return {"kind": "room", "room": m.group(1), "count": int(m.group(2)),
-                "tier": m.group(4) or "open", "topic": m.group(5)}
+                "tier": m.group(4) or ("LoRa" if lora_locked else "open"), "topic": m.group(5)}
     if line.startswith("#") and ": " in line:
         room, _, names = line.partition(": ")
         return {"kind": "names", "room": room[1:], "names": [n.strip() for n in names.split(",") if n.strip()]}

@@ -126,6 +126,9 @@ check("room aliases: lxmf and lora are lora-mesh, mesh is wifi-mesh", stump_prot
 r = stump_proto.parse_message("#lora-mesh ·2 [LoRa] LoRa (radio)")[0]
 check("/rooms: a [LoRa] tier is a tier, not part of the topic", r["kind"] == "room" and r["tier"] == "LoRa"
       and r["topic"] == "LoRa (radio)", r)
+r = stump_proto.parse_message("#lora-mesh ·2 LoRa (radio)  [LoRa]")[0]
+check("/rooms: ...also where rrc.py puts it, after the topic", r["kind"] == "room" and r["tier"] == "LoRa"
+      and r["topic"] == "LoRa (radio)", r)
 
 # /node.json's radio (Stump 1.0.0-beta.5+) against ours: a mismatched radio never hears anything.
 RADIO_NODE = {"name": "Far", "lxmf": "cd" * 16, "radio": {"frequency": 868_100_000, "bandwidth": 125_000, "sf": 8, "cr": 5}}
