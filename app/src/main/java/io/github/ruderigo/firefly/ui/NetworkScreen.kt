@@ -143,7 +143,8 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
 }
 
 private fun bytes(n: Long) = when {
-    n < 1024 -> "$n B"; n < 1024 * 1024 -> "%.1f KB".format(n / 1024.0); else -> "%.1f MB".format(n / 1048576.0)
+    n < 1024 -> "$n B"; n < 1024 * 1024 -> "%.1f KB".format(n / 1024.0)
+    n < 1024L * 1024 * 1024 -> "%.1f MB".format(n / 1048576.0); else -> "%.2f GB".format(n / 1073741824.0)
 }
 
 /** Find an RNode advertising over Bluetooth LE and pair with it. */

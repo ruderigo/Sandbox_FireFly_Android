@@ -8,10 +8,19 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.9: beta, following the Stump beta (1.0.0-beta.21)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.9: beta, following the Stump beta (1.0.0-beta.23)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
+
+### Since 0.5.0-beta.9: checked against Stump 1.0.0-beta.22 and beta.23
+Nothing a client reads changed (beta.22 and beta.23 are about a computer
+Stump's storage and stopping). Computer Stumps now accept uploads, so
+FireFly's Files tab can upload to a Stump on a Mac or PC:
+`engine-tests/run_real_upload.py <SandBox_Stump_On>` sends FireFly's own
+upload request to a real one (a name with accents included), finds the
+file in FireFly's list, and checks that a too-big one gets the 507 answer
+FireFly shows. The Network tab's traffic counter now goes up to GB.
 
 ### 0.5.0-beta.9: a Stump is kept by who it is, not where it is (Stump 1.0.0-beta.21)
 A home router moves a laptop Stump from address to address; FireFly kept
