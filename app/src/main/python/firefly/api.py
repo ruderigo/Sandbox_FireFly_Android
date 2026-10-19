@@ -370,7 +370,7 @@ def stump_view(key, room=None):
     node["nick"] = sess.my_nick()
     node["lines"] = c.store.lines(key, room)
     node["viewing"] = room
-    node["threads"] = c.store.dm_threads(key)
+    node["threads"] = c.store.dm_threads(c.same_stump(key))     # over LoRa and Wi-Fi alike
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
     node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
     node["offline_reason"] = getattr(sess, "offline_reason", None)     # why the Wi-Fi poll gets nothing
@@ -419,8 +419,10 @@ def stump_auth(key):
 
 def stump_dm_thread(key, nick):
     c = _need()
-    c.store.mark_dms_read(key, nick)
-    rows = c.store.dm_thread(key, nick)
+    key = c.resolve(key)
+    keys = c.same_stump(key)            # the messages that came over LoRa and over Wi-Fi, together
+    c.store.mark_dms_read(keys, nick)
+    rows = c.store.dm_thread(keys, nick)
     for r in rows:
         if r.get("audio_mode") is not None:
             r["audio_ms"] = r.get("audio_ms") or _codec2_ms(r)
@@ -429,7 +431,8 @@ def stump_dm_thread(key, nick):
 
 
 def stump_send_voice(key, nick, mode, data):
-    return _need().session(key).send_voice_dm(nick, mode, bytes(data))
+    c = _need()
+    return c.session(_reply_key(c, key)).send_voice_dm(nick, mode, bytes(data))
 
 
 def stump_dm_audio(dm_id):
@@ -437,8 +440,21 @@ def stump_dm_audio(dm_id):
     return data if data is not None else b""
 
 
+def _reply_key(c, key):
+    """Where a private message to this Stump can go now: the LoRa side when something can
+    carry it, else a Wi-Fi side that answers (a DM opened from its notification may be on
+    LoRa with no radio attached)."""
+    key = c.resolve(key)
+    if key.startswith("mesh:") and not c.can_reach(key[5:]):
+        for k in c.same_stump(key)[1:]:
+            if k.startswith("wifi:") and (c.store.stump_node(k) or {}).get("online"):
+                return k
+    return key
+
+
 def stump_send_dm(key, nick, text):
-    return _need().session(key).send_dm(nick, text) or -1
+    c = _need()
+    return c.session(_reply_key(c, key)).send_dm(nick, text) or -1
 
 
 # ------------------------------------------------------------------ Stump board & files (Wi-Fi)

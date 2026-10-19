@@ -394,25 +394,34 @@ class Store:
         return self._read(f"SELECT {self._DM_COLS} FROM stump_dms WHERE node=? AND outgoing=1 AND state='pending'"
                           " ORDER BY id", (node,))
 
+    # A Stump reached over LoRa and Wi-Fi is two entries (keys); its private messages are
+    # one conversation per person, whichever way each one came in. `node` is a key or a list.
+    @staticmethod
+    def _nodes(node):
+        nodes = [node] if isinstance(node, str) else list(node)
+        return nodes, ",".join("?" * len(nodes))
+
     def dm_thread(self, node, nick, limit=300):
-        rows = self._read(f"SELECT {self._DM_COLS} FROM stump_dms WHERE node=? AND nick=? ORDER BY id DESC LIMIT ?",
-                          (node, nick, limit))
+        nodes, q = self._nodes(node)
+        rows = self._read(f"SELECT {self._DM_COLS} FROM stump_dms WHERE node IN ({q}) AND nick=? ORDER BY ts DESC, id DESC LIMIT ?",
+                          (*nodes, nick, limit))
         return rows[::-1]
 
     def dm_threads(self, node):
-        return self._read("""
+        nodes, q = self._nodes(node)
+        return self._read(f"""
             SELECT d.nick, d.body, d.ts, d.outgoing, d.state,
-                   (SELECT COUNT(*) FROM stump_dms u WHERE u.node=d.node AND u.nick=d.nick AND u.unread=1) AS unread
+                   (SELECT COUNT(*) FROM stump_dms u WHERE u.node IN ({q}) AND u.nick=d.nick AND u.unread=1) AS unread
             FROM stump_dms d
-            WHERE d.node=? AND d.id = (SELECT MAX(id) FROM stump_dms x WHERE x.node=d.node AND x.nick=d.nick)
-            ORDER BY d.id DESC""", (node,))
+            WHERE d.node IN ({q}) AND d.id = (SELECT MAX(id) FROM stump_dms x WHERE x.node IN ({q}) AND x.nick=d.nick)
+            ORDER BY d.id DESC""", (*nodes, *nodes, *nodes))
 
     def mark_dms_read(self, node, nick):
+        nodes, q = self._nodes(node)
         with self.lock:
-            if self.db.execute("SELECT 1 FROM stump_dms WHERE node=? AND nick=? AND unread=1",
-                               (node, nick)).fetchone():
-                self._write("UPDATE stump_dms SET unread=0 WHERE node=? AND nick=?", (node, nick))
-
+            if self.db.execute(f"SELECT 1 FROM stump_dms WHERE node IN ({q}) AND nick=? AND unread=1",
+                               (*nodes, nick)).fetchone():
+                self._write(f"UPDATE stump_dms SET unread=0 WHERE node IN ({q}) AND nick=?", (*nodes, nick))
 
 def _decode_node(row):
     for k in ("rooms", "users", "stumps"):

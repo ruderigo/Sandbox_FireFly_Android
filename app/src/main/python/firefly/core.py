@@ -797,6 +797,18 @@ class Core:
         except Exception:
             return False
 
+    def same_stump(self, key):
+        """Every entry of the Stump behind `key`: its LoRa entry and its Wi-Fi entries share
+        its LXMF address. -> [key, ...], `key` first."""
+        node = self.store.stump_node(key) or {}
+        lx = node.get("address") if node.get("transport") == "mesh" else node.get("lxmf")
+        keys = [key]
+        if lx:
+            for n in self.store.stump_nodes():
+                if n["key"] != key and (n["key"] == "mesh:" + lx or (n["transport"] == "wifi" and (n.get("lxmf") or "") == lx)):
+                    keys.append(n["key"])
+        return keys
+
     def resolve(self, key):
         """A Wi-Fi key that moved to a new address -> the key it has now."""
         seen = set()
