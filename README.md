@@ -25,6 +25,18 @@ Opus voice notes everywhere, and delivery with the screen locked.
   Wi-Fi; red when the Wi-Fi Stumps you have open all stopped answering;
   green otherwise. A tap still opens the Network tab.
 - The Network tab's traffic counter goes up to GB.
+- **Private messages on a Stump, whichever way they came** (field fix): a
+  Stump reached over LoRa and Wi-Fi is one row but two entries, and a DM
+  that arrived over LoRa (to the phone's old nick) was counted on the row
+  but not shown, because the row opens the Wi-Fi side. A Stump's private
+  messages are now one conversation per person across both; a reply from
+  the LoRa side with no radio goes over Wi-Fi.
+- **Delete and block in a Stump's private messages:** long-press a
+  conversation (or use its ⋮ menu). Delete removes it from this phone;
+  Block also drops that nick's private messages on this Stump from then
+  on, without a notification (the Stump has no block of its own, so it
+  still carries them). Blocked nicks are listed under the conversations,
+  with Unblock.
 
 ### Checked against checked against Stump 1.0.0-beta.22 and beta.23
 Nothing a client reads changed (beta.22 and beta.23 are about a computer

@@ -87,6 +87,12 @@ CREATE TABLE IF NOT EXISTS stump_lines (
     local_state TEXT                   -- 'failed' when the node refused it (⧗), whatever LXMF says
 );
 CREATE INDEX IF NOT EXISTS stump_lines_room ON stump_lines(node, room, id);
+CREATE TABLE IF NOT EXISTS stump_blocked (  -- nicks whose private messages are dropped, per Stump
+    stump       TEXT NOT NULL,         -- the Stump's LXMF address (else its entry key)
+    nick        TEXT NOT NULL,         -- lower case
+    ts          REAL NOT NULL,
+    PRIMARY KEY (stump, nick)
+);
 CREATE TABLE IF NOT EXISTS stump_dms (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     node        TEXT NOT NULL,
@@ -415,6 +421,21 @@ class Store:
             FROM stump_dms d
             WHERE d.node IN ({q}) AND d.id = (SELECT MAX(id) FROM stump_dms x WHERE x.node IN ({q}) AND x.nick=d.nick)
             ORDER BY d.id DESC""", (*nodes, *nodes, *nodes))
+
+    def delete_dm_thread(self, node, nick):
+        """The whole private conversation with `nick` on this Stump (every entry of it)."""
+        nodes, q = self._nodes(node)
+        self._write(f"DELETE FROM stump_dms WHERE node IN ({q}) AND nick=?", (*nodes, nick))
+
+    def block_stump_nick(self, stump, nick):
+        self._write("INSERT OR REPLACE INTO stump_blocked(stump, nick, ts) VALUES (?,?,?)",
+                    (stump, nick.lower(), time.time()))
+
+    def unblock_stump_nick(self, stump, nick):
+        self._write("DELETE FROM stump_blocked WHERE stump=? AND nick=?", (stump, nick.lower()))
+
+    def stump_blocked(self, stump):
+        return [r["nick"] for r in self._read("SELECT nick FROM stump_blocked WHERE stump=? ORDER BY nick", (stump,))]
 
     def mark_dms_read(self, node, nick):
         nodes, q = self._nodes(node)

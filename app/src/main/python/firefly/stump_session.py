@@ -865,6 +865,8 @@ class StumpSession:
 
     def _incoming_dm(self, nick, text, ts=None, audio=None):
         nick = nick.lstrip("~")
+        if self.core.stump_blocks(self.key, nick):
+            return                          # blocked here: dropped, no notification
         self.store.add_dm(self.key, nick, False, text, "received", unread=True, ts=ts, audio=audio)
         self.core.emit({"type": "stump_dm", "node": self.key, "nick": nick, "text": text,
                         "node_name": (self.store.stump_node(self.key) or {}).get("name")})

@@ -371,6 +371,7 @@ def stump_view(key, room=None):
     node["lines"] = c.store.lines(key, room)
     node["viewing"] = room
     node["threads"] = c.store.dm_threads(c.same_stump(key))     # over LoRa and Wi-Fi alike
+    node["blocked"] = c.store.stump_blocked(c.stump_id(key))
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
     node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
     node["offline_reason"] = getattr(sess, "offline_reason", None)     # why the Wi-Fi poll gets nothing
@@ -428,6 +429,27 @@ def stump_dm_thread(key, nick):
             r["audio_ms"] = r.get("audio_ms") or _codec2_ms(r)
             r["audio_playable"] = r["audio_mode"] in PLAYABLE and bool(r.get("audio_len"))
     return _j(rows)
+
+
+def stump_dm_delete(key, nick):
+    """Delete the private conversation with `nick` on this Stump (over LoRa and Wi-Fi)."""
+    c = _need()
+    c.store.delete_dm_thread(c.same_stump(c.resolve(key)), str(nick).lstrip("~"))
+
+
+def stump_block_nick(key, nick):
+    """Block `nick` on this Stump: the conversation is deleted, and their private messages
+    are dropped from now on (no notification). The Stump isn't told: it has no such command."""
+    c = _need()
+    key = c.resolve(key)
+    nick = str(nick).lstrip("~")
+    c.store.block_stump_nick(c.stump_id(key), nick)
+    c.store.delete_dm_thread(c.same_stump(key), nick)
+
+
+def stump_unblock_nick(key, nick):
+    c = _need()
+    c.store.unblock_stump_nick(c.stump_id(c.resolve(key)), str(nick).lstrip("~"))
 
 
 def stump_send_voice(key, nick, mode, data):

@@ -374,14 +374,27 @@ private fun ColumnScope.PrivatePane(key: String, view: JSONObject, threads: List
     val stumps = view.optJSONArray("stumps")?.strings()?.toSet() ?: emptySet()
     // People first, then the Stumps (🪵, as the node's web chat groups them). On a chain,
     // people on other Stumps are listed as nick@thatstump and reached the same way.
+    val blocked = view.optJSONArray("blocked")?.strings() ?: emptyList()
     val others = (view.optJSONArray("users")?.strings() ?: emptyList()).map { it.removePrefix("~") }
-        .filter { it != me && it !in talking }.sortedBy { it in stumps }
+        .filter { it != me && it !in talking && it.lowercase() !in blocked }.sortedBy { it in stumps }
     var to by remember { mutableStateOf("") }
+    var choosing by remember { mutableStateOf<String?>(null) }
+    var deleting by remember { mutableStateOf<String?>(null) }
+    var blocking by remember { mutableStateOf<String?>(null) }
+    choosing?.let { nick ->
+        PersonActions(nick, onDismiss = { choosing = null },
+            onDelete = { deleting = nick; choosing = null }, onBlock = { blocking = nick; choosing = null },
+            deleteText = stringResource(R.string.stump_dm_delete_short), blockText = stringResource(R.string.stump_dm_block_short))
+    }
+    deleting?.let { nick -> ConfirmStumpDmDelete(nick, onDismiss = { deleting = null }) { Engine.fire("stump_dm_delete", key, nick); deleting = null } }
+    blocking?.let { nick -> ConfirmStumpBlock(nick, onDismiss = { blocking = null }) { Engine.fire("stump_block_nick", key, nick); blocking = null } }
     LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
         item { Text(stringResource(R.string.direct_messages), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(12.dp)) }
         if (threads.isEmpty()) item { Empty(stringResource(R.string.no_dms)) }
         items(threads, key = { "t" + it.optString("nick") }) { t ->
-            Row(Modifier.fillMaxWidth().rowClick { go(Route.Dm(key, t.optString("nick"))) }, verticalAlignment = Alignment.CenterVertically) {
+            // Tap: the conversation. Long press: delete it, or block them on this Stump.
+            Row(Modifier.fillMaxWidth().rowPress(onClick = { go(Route.Dm(key, t.optString("nick"))) },
+                onLongClick = { choosing = t.optString("nick") }), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(t.optString("nick"), style = MaterialTheme.typography.titleMedium.copy(color = Amber.DmNick))
                     Text((if (t.optInt("outgoing") == 1) stateGlyph(t.optString("state")) + " " else "") + t.optString("body"),
@@ -413,6 +426,15 @@ private fun ColumnScope.PrivatePane(key: String, view: JSONObject, threads: List
                 Button(stringResource(R.string.open_chat), enabled = to.isNotBlank()) { go(Route.Dm(key, to.trim().removePrefix("~"))) }
             }
         }
+        if (blocked.isNotEmpty()) {
+            item { Text(stringResource(R.string.stump_blocked_here), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(12.dp)) }
+            items(blocked, key = { "b$it" }) { nick ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(nick, style = MaterialTheme.typography.bodyLarge.copy(color = Amber.Dim), modifier = Modifier.weight(1f))
+                    Button(stringResource(R.string.unblock), primary = false) { Engine.fire("stump_unblock_nick", key, nick) }
+                }
+            }
+        }
     }
 }
 
@@ -427,7 +449,19 @@ fun DmScreen(key: String, nick: String, back: () -> Unit) {
         NotificationManagerCompat.from(ctx).cancel(EngineService.notificationTag(key, nick))
     }
     Column(Modifier.fillMaxSize()) {
-        TopBar(nick, stringResource(R.string.dm_via, node.optString("name")), back)
+        var deleting by remember { mutableStateOf(false) }
+        var blocking by remember { mutableStateOf(false) }
+        if (deleting) ConfirmStumpDmDelete(nick, onDismiss = { deleting = false }) {
+            Engine.fire("stump_dm_delete", key, nick); deleting = false; back()
+        }
+        if (blocking) ConfirmStumpBlock(nick, onDismiss = { blocking = false }) {
+            Engine.fire("stump_block_nick", key, nick); blocking = false; back()
+        }
+        TopBar(nick, stringResource(R.string.dm_via, node.optString("name")), back) {
+            OverflowMenu(listOf(
+                stringResource(R.string.delete) to { deleting = true },
+                stringResource(R.string.block) to { blocking = true }))
+        }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(vertical = 8.dp)) {
             if (msgs.isEmpty()) item { Empty(stringResource(R.string.dm_empty)) }
             items(msgs, key = { it.optLong("id") }) { m ->
@@ -548,3 +582,16 @@ private fun NoRadioBanner(wifiKey: String?, looking: Boolean, openWifi: (String?
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))
 }
+
+
+/** Delete a private conversation on a Stump: this phone only; they can write again. */
+@Composable
+private fun ConfirmStumpDmDelete(nick: String, onDismiss: () -> Unit, onConfirm: () -> Unit) =
+    ConfirmDialog(stringResource(R.string.delete_conv_title), stringResource(R.string.stump_dm_delete_text, nick),
+        stringResource(R.string.delete), onConfirm = onConfirm, onDismiss = onDismiss)
+
+/** Block a nick on a Stump: the conversation goes, and their private messages are dropped here. */
+@Composable
+private fun ConfirmStumpBlock(nick: String, onDismiss: () -> Unit, onConfirm: () -> Unit) =
+    ConfirmDialog(stringResource(R.string.block_title, nick), stringResource(R.string.stump_block_text, nick),
+        stringResource(R.string.block), onConfirm = onConfirm, onDismiss = onDismiss)

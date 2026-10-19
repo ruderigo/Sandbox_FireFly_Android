@@ -70,5 +70,25 @@ check("the LoRa side shows the same conversation (opened from the notification)"
 api.stump_send_dm("mesh:" + LX, "alice", "here, as RodRod")
 check("a reply from the LoRa side with no radio goes over Wi-Fi",
       wait(lambda: any(d.get("body") == "here, as RodRod" for d in rrc.inbox.get("alice", []))), rrc.inbox.get("alice"))
+# Delete and block, from the DM panel (Oct 19).
+threads = lambda: {t["nick"] for t in json.loads(api.stump_view(wkey))["threads"]}
+api.stump_dm_delete(wkey, "rod@LaBuche")
+check("delete: the conversation is gone, from both sides",
+      "rod@LaBuche" not in threads() and not json.loads(api.stump_dm_thread("mesh:" + LX, "rod@LaBuche")), threads())
+c.session("mesh:" + LX)._incoming_dm("rod@LaBuche", "hello again")
+check("...and they can write again", "rod@LaBuche" in threads(), threads())
+api.stump_block_nick("mesh:" + LX, "rod@LaBuche")
+v = json.loads(api.stump_view(wkey))
+check("block: the conversation is gone and the nick is listed as blocked (seen from either side)",
+      "rod@LaBuche" not in threads() and v["blocked"] == ["rod@labuche"], (threads(), v["blocked"]))
+c.session("mesh:" + LX)._incoming_dm("ROD@LaBuche", "over LoRa while blocked")
+c.session(wkey)._incoming_dm("~rod@LaBuche", "over Wi-Fi while blocked")
+check("...their private messages are dropped, over LoRa and Wi-Fi, whatever the case",
+      "rod@LaBuche" not in threads() and "ROD@LaBuche" not in threads(), threads())
+check("...others still come through", (c.session(wkey)._incoming_dm("bob", "hi"), "bob" in threads())[1])
+api.stump_unblock_nick(wkey, "rod@LaBuche")
+c.session("mesh:" + LX)._incoming_dm("rod@LaBuche", "unblocked")
+check("unblock: they come through again", "rod@LaBuche" in threads() and json.loads(api.stump_view(wkey))["blocked"] == [])
+
 print("ALL PASS" if not fails else f"{fails} FAILED")
 os._exit(1 if fails else 0)

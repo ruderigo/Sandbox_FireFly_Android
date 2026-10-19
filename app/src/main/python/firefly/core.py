@@ -797,6 +797,14 @@ class Core:
         except Exception:
             return False
 
+    def stump_id(self, key):
+        """Who a Stump is, whichever entry: its LXMF address, else the entry's key."""
+        node = self.store.stump_node(key) or {}
+        return (node.get("address") if node.get("transport") == "mesh" else node.get("lxmf")) or key
+
+    def stump_blocks(self, key, nick):
+        return str(nick or "").lstrip("~").lower() in self.store.stump_blocked(self.stump_id(key))
+
     def same_stump(self, key):
         """Every entry of the Stump behind `key`: its LoRa entry and its Wi-Fi entries share
         its LXMF address. -> [key, ...], `key` first."""

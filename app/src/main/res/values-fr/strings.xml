@@ -341,4 +341,9 @@
     <string name="rnode">RNode</string>
     <string name="in_use">utilisé</string>
     <string name="use_rnode">Utiliser</string>
+    <string name="stump_dm_delete_short">Supprimer cette conversation. Ils peuvent encore vous écrire.</string>
+    <string name="stump_dm_block_short">La supprimer, et ignorer leurs messages privés sur ce Stump.</string>
+    <string name="stump_dm_delete_text">La conversation avec %1$s sur ce Stump est supprimée de ce téléphone. Ils peuvent encore vous écrire, ce qui en commence une nouvelle.</string>
+    <string name="stump_block_text">La conversation est supprimée, et désormais les messages privés de %1$s sur ce Stump sont ignorés sur ce téléphone, sans notification. Ils n\'en sont pas informés, et le Stump les transmet toujours : il n\'a pas de blocage à lui. Vous pouvez les débloquer dans les messages privés de ce Stump.</string>
+    <string name="stump_blocked_here">Bloqués sur ce Stump</string>
 </resources>
