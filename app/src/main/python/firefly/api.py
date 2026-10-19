@@ -51,6 +51,13 @@ def is_running():
 
 
 # ------------------------------------------------------------------ status
+def _wifi_stumps(c):
+    """The Wi-Fi Stumps open now, and how many answer: for the Wi-Fi light."""
+    keys = [k for k in list(c.sessions) if k.startswith("wifi:")]
+    online = sum(1 for k in keys if (c.store.stump_node(k) or {}).get("online"))
+    return {"open": len(keys), "online": online}
+
+
 def status():
     c = _need()
     return _j({
@@ -59,6 +66,7 @@ def status():
         "display_name": c.settings["display_name"],
         "stump_nick": stump.clean_nick(c.settings["display_name"]),
         "radio": c.radio.snapshot() if c.radio else {"state": "off"},
+        "wifi_stumps": _wifi_stumps(c),
         "radio_wanted": {k: c.settings["radio"][k] for k in
                          ("frequency", "bandwidth", "spreading_factor", "coding_rate", "tx_power")},
         "keep_awake": bool(c.settings["radio"]["keep_awake"]),
@@ -286,7 +294,11 @@ def stump_nodes():
         first["unread_dms"] = sum(m.get("unread_dms") or 0 for m in members)
         first["name"] = next((m["name"] for m in members if m.get("name") and not str(m["name"]).startswith("Stump Wi-Fi (")),
                              first.get("name"))
+        first["group"] = g                  # stays the same whichever transport opens first
         out.append(first)
+    # A steady order: by name, not by who was heard last (Stumps close to each other beacon and
+    # answer all the time, and a list sorted by "last heard" kept jumping).
+    out.sort(key=lambda r: (str(r.get("name") or r["address"]).casefold(), r["group"]))
     return _j(out)
 
 

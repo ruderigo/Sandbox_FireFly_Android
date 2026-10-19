@@ -105,6 +105,7 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                 }
             }
         }
+        item { StumpOverWifi(go) }         // a Stump by its address (moved here from the Stumps tab)
         item {
             Section(stringResource(R.string.you_on_network)) {
                 val addr = status.optString("address")

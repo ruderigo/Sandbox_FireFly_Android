@@ -8,12 +8,25 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.9: beta, following the Stump beta (1.0.0-beta.23)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.10: beta, following the Stump beta (1.0.0-beta.23)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
 
-### Since 0.5.0-beta.9: checked against Stump 1.0.0-beta.22 and beta.23
+### 0.5.0-beta.10: a steadier Stumps tab, two connection lights
+- **The Stumps list keeps still:** it's sorted by name. It was sorted by
+  "last heard", so Stumps close to each other kept swapping places.
+- **"Stump over Wi-Fi"** (open a Stump by its address) moved from the
+  Stumps tab to the Network tab.
+- **Two lights at the top instead of the radio label:** **LoRa** and
+  **Wi-Fi**, each green (working), red (needs attention) or grey (not
+  connected). LoRa: green with an RNode online; red when one is refused or
+  the paired ones don't answer; grey when there's none. Wi-Fi: grey off
+  Wi-Fi; red when the Wi-Fi Stumps you have open all stopped answering;
+  green otherwise. A tap still opens the Network tab.
+- The Network tab's traffic counter goes up to GB.
+
+### Checked against checked against Stump 1.0.0-beta.22 and beta.23
 Nothing a client reads changed (beta.22 and beta.23 are about a computer
 Stump's storage and stopping). Computer Stumps now accept uploads, so
 FireFly's Files tab can upload to a Stump on a Mac or PC:

@@ -43,26 +43,10 @@ import org.json.JSONObject
 @Composable
 fun StumpsScreen(go: (Route) -> Unit) {
     val nodes = engineData(emptyList<JSONObject>()) { Engine.arr("stump_nodes").objects() }
-    val settings = engineData(JSONObject()) { Engine.obj("settings_get") }
-    // The address box: the gateway when it really is a Stump (its own hotspot, 192.168.n.1 along
-    // a chain); otherwise the saved default. Connect asks /node.json before opening anything.
+    // Stumps we know that answer on this Wi-Fi (STUMP?): open them here, or follow them to the
+    // address the router gave them since. One broadcast, at most every 20 s.
     val gateway by WifiHttp.gateway.collectAsState()
-    // The gateway is a Stump only on a Stump's own hotspot; on home Wi-Fi it's the router.
-    // So it's asked (/node.json) before it's offered: null while asking, then the answer.
-    var gwProbe by remember(gateway) { mutableStateOf<JSONObject?>(null) }
-    LaunchedEffect(gateway) {
-        gateway?.let { gwProbe = Engine.obj("discover_probe", "http://$it") }
-        // Stumps we know that answer on this Wi-Fi (STUMP?): open them here, or follow them
-        // to the address the router gave them since. One broadcast, at most every 20 s.
-        if (gateway != null) Engine.arr("stump_refresh_wifi")
-    }
-    val gwStump = gwProbe?.takeIf { it.optBoolean("stump") }
-    var url by remember(settings, gwStump) {
-        mutableStateOf(gwStump?.optString("base") ?: settings.optString("stump_wifi_default", "http://192.168.4.1"))
-    }
-    var connecting by remember { mutableStateOf(false) }
-    var connectError by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    LaunchedEffect(gateway) { if (gateway != null) Engine.arr("stump_refresh_wifi") }
     val hidden = engineData(0) { Engine.call("stump_hidden_count").toIntOrNull() ?: 0 }
     var acting by remember { mutableStateOf<JSONObject?>(null) }
     var removing by remember { mutableStateOf<JSONObject?>(null) }
@@ -82,7 +66,7 @@ fun StumpsScreen(go: (Route) -> Unit) {
             }
         }
         if (nodes.isEmpty()) item { Empty(stringResource(R.string.no_stumps)) }
-        items(nodes, key = { it.optString("key") }) { n ->
+        items(nodes, key = { it.optString("group").ifBlank { it.optString("key") } }) { n ->
             val mesh = n.optString("transport") == "mesh"
             val both = (n.optJSONArray("transports")?.length() ?: 1) > 1
             Row(Modifier.fillMaxWidth().rowPress(onClick = { go(Route.Node(n.optString("key"))) }, onLongClick = { acting = n }),
@@ -110,45 +94,65 @@ fun StumpsScreen(go: (Route) -> Unit) {
                 .clip(Small).clickable { Engine.fire("stump_restore_hidden") }.padding(6.dp),
                 style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
         }
-        item {
-            Section(stringResource(R.string.join_wifi)) {
-                Text(stringResource(R.string.join_wifi_help), style = MaterialTheme.typography.bodySmall)
-                gateway?.let { gw ->
-                    val p = gwProbe
-                    Text(when {
-                        p == null -> stringResource(R.string.find_checking, gw)
-                        p.optBoolean("stump") -> stringResource(R.string.join_wifi_gateway_stump,
-                            p.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: "Stump", gw)
-                        else -> stringResource(R.string.join_wifi_gateway_router, gw)
-                    }, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
-                }
-                Spacer(Modifier.height(8.dp))
-                Field(url, { url = it; connectError = null }, Modifier.fillMaxWidth(), mono = true)
-                connectError?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall.copy(color = Amber.Error), modifier = Modifier.padding(top = 4.dp))
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Button(stringResource(if (connecting) R.string.connect_checking else R.string.connect), enabled = !connecting) {
-                        val u = url
-                        connecting = true; connectError = null
-                        scope.launch {
-                            val r = Engine.obj("stump_connect_checked", u)
-                            connecting = false
-                            val k = r.optString("key")
-                            if (k.isNotBlank() && k != "null") {
-                                go(Route.Node(k))
-                            } else {
-                                connectError = r.optString("error").takeIf { it.isNotBlank() && it != "null" }
-                                    ?.let { why -> "${r.optString("base", u)}: $why" }
-                            }
-                        }
+    }
+}
+
+
+/**
+ * Open a Stump by its address (in the Network tab). The gateway is offered only when it
+ * really is a Stump (its own hotspot, 192.168.n.1 along a chain): on home Wi-Fi it's the
+ * router. Connect asks /node.json before opening anything.
+ */
+@Composable
+fun StumpOverWifi(go: (Route) -> Unit) {
+    val settings = engineData(JSONObject()) { Engine.obj("settings_get") }
+    val gateway by WifiHttp.gateway.collectAsState()
+    // Asked (/node.json) before it's offered: null while asking, then the answer.
+    var gwProbe by remember(gateway) { mutableStateOf<JSONObject?>(null) }
+    LaunchedEffect(gateway) { gateway?.let { gwProbe = Engine.obj("discover_probe", "http://$it") } }
+    val gwStump = gwProbe?.takeIf { it.optBoolean("stump") }
+    var url by remember(settings, gwStump) {
+        mutableStateOf(gwStump?.optString("base") ?: settings.optString("stump_wifi_default", "http://192.168.4.1"))
+    }
+    var connecting by remember { mutableStateOf(false) }
+    var connectError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    Section(stringResource(R.string.join_wifi)) {
+        Text(stringResource(R.string.join_wifi_help), style = MaterialTheme.typography.bodySmall)
+        gateway?.let { gw ->
+            val p = gwProbe
+            Text(when {
+                p == null -> stringResource(R.string.find_checking, gw)
+                p.optBoolean("stump") -> stringResource(R.string.join_wifi_gateway_stump,
+                    p.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: "Stump", gw)
+                else -> stringResource(R.string.join_wifi_gateway_router, gw)
+            }, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        Field(url, { url = it; connectError = null }, Modifier.fillMaxWidth(), mono = true)
+        connectError?.let {
+            Text(it, style = MaterialTheme.typography.labelSmall.copy(color = Amber.Error), modifier = Modifier.padding(top = 4.dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(stringResource(if (connecting) R.string.connect_checking else R.string.connect), enabled = !connecting) {
+                val u = url
+                connecting = true; connectError = null
+                scope.launch {
+                    val r = Engine.obj("stump_connect_checked", u)
+                    connecting = false
+                    val k = r.optString("key")
+                    if (k.isNotBlank() && k != "null") {
+                        go(Route.Node(k))
+                    } else {
+                        connectError = r.optString("error").takeIf { it.isNotBlank() && it != "null" }
+                            ?.let { why -> "${r.optString("base", u)}: $why" }
                     }
-                    if (connectError != null) {
-                        Spacer(Modifier.width(8.dp))
-                        Button(stringResource(R.string.find_stumps), primary = false) { go(Route.FindStumps) }
-                    }
                 }
+            }
+            if (connectError != null) {
+                Spacer(Modifier.width(8.dp))
+                Button(stringResource(R.string.find_stumps), primary = false) { go(Route.FindStumps) }
             }
         }
     }
