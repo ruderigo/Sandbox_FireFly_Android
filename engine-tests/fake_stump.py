@@ -50,6 +50,10 @@ class FakeRRC:
         # Stump 1.0.0-beta.21 access modes (stumpid): "hybrid" lets anyone write only in #main
         # before /auth; a line elsewhere, or a private message, gets AUTH_REQUIRED.
         self.auth_mode = os.environ.get("FAKE_STUMP_MODE", "open")
+        self.renamed = {}               # "old" -> "new" nicks of the last 30 minutes (beta.25 poll field)
+        self.busy = 0                   # answer this many requests "503 busy" (beta.24 connection limits)
+        self.auth_seen = []             # keys that sent /auth (FireFly does it on connecting, beta.25)
+        self.no_auth = False            # answer /auth "? /auth" (no identity plugin)
 
     def _take_token(self, key):
         """Lines others see: 3 at once, then one every 2 s (Stump 1.0.0-beta.3's guard)."""
@@ -119,6 +123,10 @@ class FakeRRC:
                 return [], None
             cmd, _, rest = line.partition(" ")
             cmd = cmd.lower()
+            if cmd == "/auth":
+                self.auth_seen.append(key)
+                if self.no_auth:                # a Stump without identities: /auth is unknown
+                    return ["? /auth"], None
             if cmd == "/auth" and not rest:
                 n = secrets.token_hex(16)
                 self.nonces[key] = (n, time.time())
@@ -241,6 +249,7 @@ class FakeRRC:
                     "rooms": sorted(self.rooms), "messages": msgs, "dms": dms,
                     "users": [x["nick"] for x in self.users.values() if x["room"] == u["room"]], "stumps": [],
                     "node": {"name": "LaBuche Test", "lxmf": self.node_lxmf},
+                    **({"renamed": dict(self.renamed)} if self.renamed else {}),   # Stump 1.0.0-beta.25
                     "hw": {"state": "online", "title": "USB /dev/ttyUSB0 · Heltec V3 · RNode 1.82"}}
 
 
@@ -428,6 +437,12 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0, dire
 
         def do_GET(self):
             u = urlparse(self.path)
+            if rrc.busy > 0:                    # full right now: 503, Retry-After: 2, body "busy"
+                rrc.busy -= 1
+                body = b"busy"
+                self.send_response(503); self.send_header("Retry-After", "2")
+                self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+                return
             if delay:
                 time.sleep(delay)
             if u.path == "/stumps.json":
@@ -510,6 +525,12 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0, dire
 
         def do_POST(self):
             u = urlparse(self.path)
+            if rrc.busy > 0:                    # full right now: 503, Retry-After: 2, body "busy"
+                rrc.busy -= 1
+                body = b"busy"
+                self.send_response(503); self.send_header("Retry-After", "2")
+                self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+                return
             if u.path == "/post":
                 if self._off("BOARD"):
                     return self._text(404, "not offered on this node")

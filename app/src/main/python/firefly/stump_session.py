@@ -31,6 +31,9 @@ from . import stump
 MESH, WIFI = "mesh", "wifi"
 POLL_BASE_S, POLL_MAX_S, POLL_JITTER = 2.0, 30.0, 0.30
 MESH_LANDING_ROOM = "lora-mesh"     # was #lxmf before Stump 1.0.0-beta.4; learned from the node's → #room
+BUSY = 503                          # Stump 1.0.0-beta.24: full right now, "Retry-After: 2"
+BUSY_RETRY_S = 2
+BUSY_TRIES = 3
 SLOW_WINDOW_S = 60                  # a ⧗ answers something we sent within this
 MOVE_WINDOW_S = 60        # a move's own "✓ me" arrives within this; our lines sent this recently can be re-filed
 JOIN_WINDOW_S = 120       # how long a reply can still be the answer to our /join
@@ -209,6 +212,11 @@ class WifiPipe:
                 path, body_bytes, ctype = "/rrc/send", line.encode("utf-8"), "text/plain; charset=utf-8"
             try:
                 status, body = self._call("POST", path, body_bytes, content_type=ctype)
+                for _ in range(BUSY_TRIES):             # 503 busy: the Stump is full right now
+                    if status != BUSY or not self.running:
+                        break
+                    time.sleep(BUSY_RETRY_S)
+                    status, body = self._call("POST", path, body_bytes, content_type=ctype)
                 if status == 200:
                     data = json.loads(body.decode("utf-8") or "{}") if body else {}
                     self.session.on_http_replies(data.get("replies") or [], data.get("room"), sent=line)
@@ -216,6 +224,9 @@ class WifiPipe:
                     self.session.on_http_error("chat is not offered on this node")
                 elif status == 413:
                     self.session.on_http_error("message too large for the node (8 KB max)")
+                elif status == BUSY:
+                    self.session.on_http_error("not sent: the Stump is busy (too many connections); tap to send again",
+                                               sent=line, unsent=True)
                 elif status < 0:
                     if not self._resend_elsewhere(item, line):
                         self.session.on_http_error(f"not sent: {net_reason(body)}", sent=line, unsent=True)
@@ -255,6 +266,8 @@ class WifiPipe:
                     ok = True
                 elif status == 404:
                     self.session.on_http_error("chat is not offered on this node")
+                elif status == BUSY:
+                    ok = None                           # full right now (Retry-After: 2): ask again soon
                 elif status < 0:
                     self.session.set_online(False, net_reason(body))
                     if self.session.relocate():         # found at a new address: this pipe is done
@@ -267,7 +280,8 @@ class WifiPipe:
                 if self.session.relocate():
                     break
             # Reference cadence: 2 s, doubled per failure up to 30 s, reset on success, +0..30% jitter.
-            self.interval = POLL_BASE_S if ok else min(self.interval * 2, POLL_MAX_S)
+            self.interval = (POLL_BASE_S if ok else BUSY_RETRY_S if ok is None
+                             else min(self.interval * 2, POLL_MAX_S))
             self.wake.wait(self.interval * (1 + random.random() * POLL_JITTER))
             self.wake.clear()
 
@@ -351,6 +365,9 @@ class StumpSession:
         self.last_command_at = 0.0          # our last /command or !plugin line (⧗ can answer either)
         self.last_sent = None               # the last thing we sent: {"kind", "id", "text", "at"} (what a ⧗ refused)
         self._reply_to = None               # the line an HTTP reply answers, while it's handled
+        self.auto_auth_tried = pipe.kind != WIFI       # Wi-Fi: /auth once connected (Stump 1.0.0-beta.25)
+        self.auth_quiet, self.auth_before = False, None
+        self.folded = set()                 # "renamed" pairs already applied
         self.offline_reason = None          # why the last Wi-Fi poll got nothing ("connection refused"…)
         self.hw = None                      # the node's radio state from the poll (Stump 1.0.0-beta.5+)
         self._save(name=name or node.get("name") or pipe.address, room=self.room, active=1,
@@ -480,7 +497,7 @@ class StumpSession:
             self.store.update_dm(dm_id, msg_id=msg_id)
         return dm_id
 
-    def start_auth(self):
+    def start_auth(self, quiet=False):
         if self.pipe.kind == MESH and not self.core.can_reach(self.pipe.address):
             # No radio and no other way to this Stump: the challenge could never arrive.
             self._save(auth="failed", auth_detail="no radio, and no other way to reach this Stump")
@@ -489,17 +506,37 @@ class StumpSession:
             if self.auth and self.auth.busy and time.time() - self.auth.started < stump.AUTH_WINDOW_S + 30:
                 return False
             self.auth = stump.AuthSession(self.key)
+            self.auth_quiet = quiet             # on connecting: no lines in the room, no "failed"
+            self.auth_before = (self.store.stump_node(self.key) or {}).get("auth")
             line = self.auth.start()
         self._save(auth="waiting", auth_detail="")
         self.pipe.send(line, control=True)
         return True
+
+    def _fold_renamed(self, renamed):
+        """"renamed": {"old": "new"} (the last 30 minutes): someone changed nick (or a LoRa
+        contact announced a new name). Their private conversation follows the new name,
+        and so does a block. Our own rename is the poll's "nick"."""
+        for old, new in list(renamed.items())[:50]:
+            old, new = str(old).lstrip("~"), str(new).lstrip("~")
+            if not old or not new or old == new or (old, new) in self.folded:
+                continue
+            self.folded.add((old, new))
+            keys = self.core.same_stump(self.key)
+            self.store.rename_dm_nick(keys, old, new)
+            sid = self.core.stump_id(self.key)
+            if old.lower() in self.store.stump_blocked(sid):
+                self.store.block_stump_nick(sid, new)
 
     def auth_timed_out(self):
         """A verification nobody answered (out of reach): say so instead of waiting forever."""
         with self.lock:
             if self.auth and self.auth.busy and time.time() - self.auth.started > stump.AUTH_WINDOW_S + 30:
                 self.auth = None
-                self._save(auth="failed", auth_detail="no answer from the node")
+                if self.auth_quiet:             # our own try on connecting: no news is no failure
+                    self._save(auth=self.auth_before or "none", auth_detail="")
+                else:
+                    self._save(auth="failed", auth_detail="no answer from the node")
 
     def my_nick(self):
         if self.nick:
@@ -565,6 +602,15 @@ class StumpSession:
         fields["users"] = data.get("users") or []
         fields["stumps"] = data.get("stumps") or []
         self._save(**fields)
+        renamed = data.get("renamed")
+        if isinstance(renamed, dict):
+            self._fold_renamed(renamed)
+        if not self.auto_auth_tried:
+            # One phone on Wi-Fi and LoRa is one person on the Stump only once it proves its
+            # identity over Wi-Fi: so /auth as soon as we're connected, not only when asked.
+            self.auto_auth_tried = True
+            if (self.store.stump_node(self.key) or {}).get("auth") != "waiting":
+                self.start_auth(quiet=True)
         for m in data.get("messages") or []:
             if m.get("id") in self.seen_remote:
                 continue
@@ -653,6 +699,9 @@ class StumpSession:
             self.join_target = None                     # refused: we stay where we are
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "unknown_command":
+            if self.auth_quiet and self.auth and self.auth.busy and "/auth" in p["text"]:
+                self.auth = None                # a node without /auth: nothing to prove there
+                return self._save(auth=self.auth_before or "none", auth_detail="")
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "needs_auth":                         # not "auth_…": those are the /auth tokens
             return self._needs_auth(p["text"])
@@ -881,10 +930,14 @@ class StumpSession:
             self.pipe.send(reply, control=True)
         if sess.state == stump.AuthSession.OK:
             self._save(auth="ok", auth_detail=sess.identity_hash or "")
-            self.store.add_line(self.key, self.room, "reply", "AUTH-OK " + (sess.identity_hash or ""))
+            if not self.auth_quiet:
+                self.store.add_line(self.key, self.room, "reply", "AUTH-OK " + (sess.identity_hash or ""))
         elif sess.state == stump.AuthSession.FAILED:
-            self._save(auth="failed", auth_detail=sess.reason or "")
-            self.store.add_line(self.key, self.room, "reply", "AUTH-FAIL " + (sess.reason or ""))
+            if self.auth_quiet:
+                self._save(auth=self.auth_before or "none", auth_detail="")
+            else:
+                self._save(auth="failed", auth_detail=sess.reason or "")
+                self.store.add_line(self.key, self.room, "reply", "AUTH-FAIL " + (sess.reason or ""))
 
 
 def _seconds(label):

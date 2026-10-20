@@ -427,6 +427,11 @@ class Store:
         nodes, q = self._nodes(node)
         self._write(f"DELETE FROM stump_dms WHERE node IN ({q}) AND nick=?", (*nodes, nick))
 
+    def rename_dm_nick(self, node, old, new):
+        """Someone's new nick: their private conversation follows it."""
+        nodes, q = self._nodes(node)
+        self._write(f"UPDATE stump_dms SET nick=? WHERE node IN ({q}) AND nick=?", (new, *nodes, old))
+
     def block_stump_nick(self, stump, nick):
         self._write("INSERT OR REPLACE INTO stump_blocked(stump, nick, ts) VALUES (?,?,?)",
                     (stump, nick.lower(), time.time()))

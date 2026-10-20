@@ -32,6 +32,7 @@ def wait(cond, secs=20):
     return False
 
 rrc = FakeRRC(rns_verify)
+rrc.no_auth = True          # FireFly verifies itself on connecting (beta.25): refuse that one, to test before Verify
 serve_http(47650, rrc)
 
 class L:
@@ -40,6 +41,10 @@ api.start(tempfile.mkdtemp(prefix="ff-hybrid-"), None, None, L())
 key = api.stump_connect_wifi("http://127.0.0.1:47650")
 v = lambda room=None: json.loads(api.stump_view(key, room))
 check("connected", wait(lambda: v().get("online") == 1))
+check("its own /auth on connecting went unanswered: quietly, not 'failed', no '? /auth' line",
+      wait(lambda: "web:127.0.0.1" in rrc.auth_seen) and wait(lambda: v()["auth"] == "none", 10)
+      and not any("/auth" in l["body"] for l in v()["lines"]), (v()["auth"], [l["body"] for l in v()["lines"]]))
+rrc.no_auth = False
 
 api.stump_post(key, "hello main")
 check("#main: anyone writes", wait(lambda: any("hello main" in m["body"] for m in rrc.rooms["main"])))

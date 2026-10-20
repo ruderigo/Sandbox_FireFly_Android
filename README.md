@@ -8,7 +8,7 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.10: beta, following the Stump beta (1.0.0-beta.23)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.10: beta, following the Stump beta (1.0.0-beta.25)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
@@ -37,6 +37,16 @@ Opus voice notes everywhere, and delivery with the screen locked.
   on, without a notification (the Stump has no block of its own, so it
   still carries them). Blocked nicks are listed under the conversations,
   with Unblock.
+- **One person on a Stump over Wi-Fi and LoRa** (Stump 1.0.0-beta.25):
+  FireFly now verifies itself (`/auth`) as soon as it connects over Wi-Fi,
+  without a tap, so the Stump can join your Wi-Fi and LoRa sides into one
+  person (one nick, private messages reaching you either way). Quietly: no
+  line in the room, and a Stump that doesn't answer leaves no "failed".
+- **Renames followed:** when someone changes nick (the poll's new
+  `"renamed"`), their private conversation, and a block, follow the new
+  name.
+- **A busy Stump** (`503`, Stump 1.0.0-beta.24's connection limits): FireFly
+  waits 2 s and asks again, instead of calling it offline or losing a line.
 
 ### Checked against checked against Stump 1.0.0-beta.22 and beta.23
 Nothing a client reads changed (beta.22 and beta.23 are about a computer

@@ -101,6 +101,11 @@ check("...and the line that failed arrived there",
       wait(lambda: "hello after the move" in opener.open(f"http://{IP}:{PORT}/rrc/poll?room=main&since=0", timeout=5).read().decode()),
       "")
 
+check("FireFly verified itself there on its own (/auth on connecting, Stump 1.0.0-beta.25)",
+      wait(lambda: (core.store.stump_node(new_key) or {}).get("auth") == "ok", 30),
+      (core.store.stump_node(new_key) or {}).get("auth"))
+check("...quietly", not any(l["body"].startswith("AUTH-") for l in lines()), [l["body"] for l in lines()])
+
 # --- its beacon, as the Stump builds it
 sys.path[:0] = [os.path.join(STUMP, "pc", "pc_compat"), os.path.join(STUMP, "final_firmware")]
 try:

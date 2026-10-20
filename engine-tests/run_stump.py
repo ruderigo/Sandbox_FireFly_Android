@@ -254,8 +254,10 @@ check(wkey not in keys() and api.stump_hidden_count() == 0, "removed: not listed
 check(core.store.stump_node(wkey) is None and not core.store.lines(wkey, "lounge") and not core.store.dm_threads(wkey),
       "removed: node, rooms and DMs deleted from the phone")
 api.stump_connect_wifi("127.0.0.1:47530")
-check(wkey in keys() and json.loads(api.stump_view(wkey))["auth"] == "none",
-      "connecting again starts a fresh entry (our old state, like verification, is gone)")
+fresh = json.loads(api.stump_view(wkey))
+# (Its room history comes back from the node's own scrollback; what the phone kept was deleted above.)
+check(wkey in keys() and fresh["auth"] in ("none", "waiting", "ok"),    # it verifies itself again on connecting (beta.25)
+      "connecting again starts a fresh entry (old verification gone; it verifies itself anew)")
 api.stump_close(wkey)
 srv.shutdown()
 
