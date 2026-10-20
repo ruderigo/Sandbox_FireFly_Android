@@ -31,6 +31,9 @@ from . import stump
 MESH, WIFI = "mesh", "wifi"
 POLL_BASE_S, POLL_MAX_S, POLL_JITTER = 2.0, 30.0, 0.30
 MESH_LANDING_ROOM = "lora-mesh"     # was #lxmf before Stump 1.0.0-beta.4; learned from the node's → #room
+HELLO_OK = ("/auth", "/nick", "/help", "/whoami")    # what a Stump takes before the greeting (beta.31)
+HELLO_WAIT_S = 25                   # how long a line waits for the greeting before it's "not sent"
+GREET_EVERY_S = 20                  # at most one greeting this often, if the Stump keeps asking
 BUSY = 503                          # Stump 1.0.0-beta.24: full right now, "Retry-After: 2"
 BUSY_RETRY_S = 2
 BUSY_TRIES = 3
@@ -173,7 +176,11 @@ class WifiPipe:
         self.wake.set()
 
     def send(self, line, control=False):
-        self.outq.put(line)
+        if control:
+            # /auth, /nick of the greeting: right away, not behind lines that wait for it.
+            threading.Thread(target=self._send_one, args=(line,), daemon=True, name="stump-control").start()
+        else:
+            self.outq.put(line)
         return None
 
     def send_voice(self, nick, mode, data):
@@ -202,40 +209,58 @@ class WifiPipe:
             line = self.outq.get()
             if line is None:
                 break
-            item = line                             # as queued: resent as is if the Stump moved
-            if isinstance(line, tuple):             # ("voice", nick, mode, frames)
-                _, nick, mode, data = line
-                line = f"/msg {nick} {voice_label(mode, data)}"
-                path = f"/rrc/voice?to={urllib.parse.quote(nick, safe='')}&mode={mode}"
-                body_bytes, ctype = data, "application/octet-stream"
-            else:
-                path, body_bytes, ctype = "/rrc/send", line.encode("utf-8"), "text/plain; charset=utf-8"
-            try:
-                status, body = self._call("POST", path, body_bytes, content_type=ctype)
-                for _ in range(BUSY_TRIES):             # 503 busy: the Stump is full right now
-                    if status != BUSY or not self.running:
-                        break
-                    time.sleep(BUSY_RETRY_S)
+            self._send_one(line)
+
+    def _send_one(self, line):
+        item = line                             # as queued: resent as is if the Stump moved
+        if isinstance(line, tuple):             # ("voice", nick, mode, frames)
+            _, nick, mode, data = line
+            line = f"/msg {nick} {voice_label(mode, data)}"
+            path = f"/rrc/voice?to={urllib.parse.quote(nick, safe='')}&mode={mode}"
+            body_bytes, ctype = data, "application/octet-stream"
+        else:
+            path, body_bytes, ctype = "/rrc/send", line.encode("utf-8"), "text/plain; charset=utf-8"
+        greeting_line = isinstance(item, str) and item.strip().lower().split(" ", 1)[0] in HELLO_OK
+        if not greeting_line and self.session and not self.session.wait_hello():
+            self.session.on_http_error("not sent: FireFly couldn't introduce itself to this Stump (/auth, /nick)",
+                                       sent=line, unsent=True)
+            return
+        try:
+            status, body = self._call("POST", path, body_bytes, content_type=ctype)
+            if status == 200 and not greeting_line and b'"hello_required"' in body:
+                # The Stump wants the greeting first (a new session): greet, then send it again.
+                self.session.hello_needed()
+                if self.session.wait_hello():
                     status, body = self._call("POST", path, body_bytes, content_type=ctype)
-                if status == 200:
-                    data = json.loads(body.decode("utf-8") or "{}") if body else {}
-                    self.session.on_http_replies(data.get("replies") or [], data.get("room"), sent=line)
-                elif status == 404:
-                    self.session.on_http_error("chat is not offered on this node")
-                elif status == 413:
-                    self.session.on_http_error("message too large for the node (8 KB max)")
-                elif status == BUSY:
-                    self.session.on_http_error("not sent: the Stump is busy (too many connections); tap to send again",
-                                               sent=line, unsent=True)
-                elif status < 0:
-                    if not self._resend_elsewhere(item, line):
-                        self.session.on_http_error(f"not sent: {net_reason(body)}", sent=line, unsent=True)
+            for _ in range(BUSY_TRIES):             # 503 busy: the Stump is full right now
+                if status != BUSY or not self.running:
+                    break
+                time.sleep(BUSY_RETRY_S)
+                status, body = self._call("POST", path, body_bytes, content_type=ctype)
+            if status == 200:
+                data = json.loads(body.decode("utf-8") or "{}") if body else {}
+                if data.get("error") == "hello_required":
+                    self.session.on_http_error("not sent: this Stump wants FireFly to introduce itself first; "
+                                               "tap Verify me, then send again", sent=line, unsent=True)
                 else:
-                    self.session.on_http_error(f"send failed (HTTP {status})", sent=line, unsent=True)
-            except Exception as e:
+                    self.session.on_http_replies(data.get("replies") or [], data.get("room"), sent=line,
+                                                 hello=data.get("hello"))
+            elif status == 404:
+                self.session.on_http_error("chat is not offered on this node")
+            elif status == 413:
+                self.session.on_http_error("message too large for the node (8 KB max)")
+            elif status == BUSY:
+                self.session.on_http_error("not sent: the Stump is busy (too many connections); tap to send again",
+                                           sent=line, unsent=True)
+            elif status < 0:
                 if not self._resend_elsewhere(item, line):
-                    self.session.on_http_error(f"not sent: {net_reason(str(e))}", sent=line, unsent=True)
-            self.wake.set()                 # see our line / its effects on the next poll, now
+                    self.session.on_http_error(f"not sent: {net_reason(body)}", sent=line, unsent=True)
+            else:
+                self.session.on_http_error(f"send failed (HTTP {status})", sent=line, unsent=True)
+        except Exception as e:
+            if not self._resend_elsewhere(item, line):
+                self.session.on_http_error(f"not sent: {net_reason(str(e))}", sent=line, unsent=True)
+        self.wake.set()                 # see our line / its effects on the next poll, now
 
     def _resend_elsewhere(self, item, line):
         """Nothing answered: maybe the router gave the Stump a new address. Find it by
@@ -244,9 +269,8 @@ class WifiPipe:
         moved = self.session.relocate() if self.session else None
         if moved is None:
             return False
-        if isinstance(line, str) and line.lower().startswith("/auth"):
-            moved.on_http_error("the Stump moved to a new address: tap Verify again", sent=line, unsent=True)
-            return True
+        if isinstance(line, str) and line.lower().startswith(("/auth", "/nick")):
+            return True                     # the greeting: the session at the new address greets by itself
         moved.pipe.outq.put(item)
         moved.pipe.poke()
         return True
@@ -366,6 +390,15 @@ class StumpSession:
         self.last_sent = None               # the last thing we sent: {"kind", "id", "text", "at"} (what a ⧗ refused)
         self._reply_to = None               # the line an HTTP reply answers, while it's handled
         self.auto_auth_tried = pipe.kind != WIFI       # Wi-Fi: /auth once connected (Stump 1.0.0-beta.25)
+        # The greeting (Stump 1.0.0-beta.31): an app without cookies says who it is before it
+        # chats, /auth then /nick <its name>. None: the Stump doesn't ask; "required"; "done".
+        # Over Wi-Fi it's "unknown" until the first answer says (lines wait for it, briefly).
+        self.hello = "unknown" if pipe.kind == WIFI else None
+        self.hello_ok = threading.Event()
+        if self.hello is None:
+            self.hello_ok.set()
+        self.greeted_at = 0.0
+        self.greeting_nick = None           # the /nick line we sent as part of the greeting
         self.auth_quiet, self.auth_before = False, None
         self.folded = set()                 # "renamed" pairs already applied
         self.offline_reason = None          # why the last Wi-Fi poll got nothing ("connection refused"…)
@@ -373,6 +406,8 @@ class StumpSession:
         self._save(name=name or node.get("name") or pipe.address, room=self.room, active=1,
                    last_seen=time.time())
         pipe.start(self)
+        if pipe.kind == WIFI:
+            self.greet()                    # say who we are first (Stump 1.0.0-beta.31; harmless before)
 
     @property
     def transport(self): return self.pipe.kind
@@ -390,8 +425,13 @@ class StumpSession:
 
     def relocate(self):
         """Not answering at its address: the session of the same Stump at its new one, or None."""
-        if self.closed or self.pipe.kind != WIFI:
+        if self.pipe.kind != WIFI:
             return None
+        if self.closed:
+            # Already followed to its new address (by another line that failed first): the
+            # lines still in flight here go there too.
+            moved = self.core.resolve(self.key)
+            return self.core.sessions.get(moved) if moved != self.key else None
         try:
             return self.core.relocate(self.key)
         except Exception as e:
@@ -400,6 +440,8 @@ class StumpSession:
 
     def set_online(self, online, reason=None):
         self.offline_reason = None if online else reason
+        if not online and getattr(self, "hello", None) == "unknown":
+            self._hello_not_asked()         # unreachable: lines fail with the real reason, not after a wait
         self._save(online=1 if online else 0, **({"last_seen": time.time()} if online else {}))
 
     # ------------------------------------------------------------ outgoing
@@ -513,6 +555,53 @@ class StumpSession:
         self.pipe.send(line, control=True)
         return True
 
+    def hello_needed(self):
+        """The Stump asks for the greeting (a poll or a send said "hello": "required")."""
+        self.hello = "required"
+        self.hello_ok.clear()
+        self.greet()
+
+    def _hello_done(self):
+        self.hello = "done"
+        self.hello_ok.set()
+
+    def wait_hello(self, secs=HELLO_WAIT_S):
+        """For a line about to go out: True once the Stump has our greeting (or never asked)."""
+        return self.hello_ok.wait(secs) if self.hello in ("required", "unknown") else True
+
+    @staticmethod
+    def _replies_answer(sent):
+        return sent is not None
+
+    def _hello_not_asked(self):
+        """The Stump answered without "hello": one from before the greeting."""
+        if self.hello == "unknown":
+            self.hello = None
+            self.hello_ok.set()
+
+    def greet(self):
+        """/auth (quietly); its AUTH-OK sends /nick <our name> if the Stump still needs one."""
+        now = time.time()
+        if now - self.greeted_at < GREET_EVERY_S:
+            return
+        self.greeted_at = now
+        self.auto_auth_tried = True
+        self.start_auth(quiet=True)
+
+    def _greeting_nick(self):
+        """After AUTH-OK in a greeting: our name, unless the Stump already has it (from LoRa)."""
+        name = stump.clean_nick(self.core.settings["display_name"])
+        if self.hello == "required" and name:
+            self.greeting_nick = f"/nick {name}"
+            self.pipe.send(self.greeting_nick, control=True)
+
+    def rename(self, name):
+        """The user chose a new name in Settings: tell this Stump (over Wi-Fi the announce
+        doesn't reach it). Over LoRa the next announce does it."""
+        if self.pipe.kind == WIFI and self.hello is not None and name:
+            self.greeting_nick = f"/nick {name}"
+            self.pipe.send(self.greeting_nick, control=True)
+
     def _fold_renamed(self, renamed):
         """"renamed": {"old": "new"} (the last 30 minutes): someone changed nick (or a LoRa
         contact announced a new name). Their private conversation follows the new name,
@@ -576,6 +665,15 @@ class StumpSession:
     @_while_open
     def on_http_poll(self, data):
         self.set_online(True)
+        if data.get("hello") == "required":
+            # Nothing to read until we've said who we are (no messages, people or rooms in this
+            # answer): keep what we show, and greet. Not a sign of anything wrong.
+            self.hello_needed()
+            return
+        if data.get("hello") == "done":
+            self._hello_done()
+        elif data.get("hello") is None:
+            self._hello_not_asked()
         fields = {}
         if data.get("room") and data["room"] != self.room:
             self.room = data["room"]
@@ -605,7 +703,7 @@ class StumpSession:
         renamed = data.get("renamed")
         if isinstance(renamed, dict):
             self._fold_renamed(renamed)
-        if not self.auto_auth_tried:
+        if not self.auto_auth_tried and data.get("hello") is None:      # a Stump from before the greeting
             # One phone on Wi-Fi and LoRa is one person on the Stump only once it proves its
             # identity over Wi-Fi: so /auth as soon as we're connected, not only when asked.
             self.auto_auth_tried = True
@@ -645,8 +743,21 @@ class StumpSession:
             self._incoming_dm(d.get("nick", "?"), d.get("body", ""), ts=d.get("ts"), audio=audio)
 
     @_while_open
-    def on_http_replies(self, replies, room, sent=None):
+    def on_http_replies(self, replies, room, sent=None, hello=None):
         self.set_online(True)
+        if hello == "done":
+            self._hello_done()
+        elif hello == "required":
+            self.hello = "required"         # (read by AUTH-OK: is a /nick still needed?)
+            self.hello_ok.clear()
+        elif self.hello == "unknown" and self._replies_answer(sent):
+            self._hello_not_asked()
+        if sent is not None and sent == self.greeting_nick:
+            self.greeting_nick = None
+            if hello != "done":             # refused (the name is taken?): say so, once
+                for r in replies:
+                    self.store.add_line(self.key, self.room, "reply", str(r))
+            return
         if room:
             self.room = room
             self._save(room=room)
@@ -930,6 +1041,8 @@ class StumpSession:
             self.pipe.send(reply, control=True)
         if sess.state == stump.AuthSession.OK:
             self._save(auth="ok", auth_detail=sess.identity_hash or "")
+            if self.hello == "required":
+                self._greeting_nick()           # the second half of the greeting
             if not self.auth_quiet:
                 self.store.add_line(self.key, self.room, "reply", "AUTH-OK " + (sess.identity_hash or ""))
         elif sess.state == stump.AuthSession.FAILED:

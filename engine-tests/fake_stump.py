@@ -54,6 +54,13 @@ class FakeRRC:
         self.busy = 0                   # answer this many requests "503 busy" (beta.24 connection limits)
         self.auth_seen = []             # keys that sent /auth (FireFly does it on connecting, beta.25)
         self.no_auth = False            # answer /auth "? /auth" (no identity plugin)
+        # The greeting (Stump 1.0.0-beta.31, APP_HELLO): an app without cookies must /auth, then
+        # /nick, before it reads or writes. lora_names: keys whose name the Stump already heard
+        # on LoRa (/auth alone is enough for them).
+        self.hello_gate = False
+        self.nick_chosen = set()
+        self.lora_names = {}
+        self.sent_log = []              # (key, line) as /rrc/send got them
 
     def _take_token(self, key):
         """Lines others see: 3 at once, then one every 2 s (Stump 1.0.0-beta.3's guard)."""
@@ -176,6 +183,7 @@ class FakeRRC:
                     {"id": self._id(), "ts": time.time(), "nick": me, "body": text, "kind": "dm"})
                 return [f"[DM] <{me}>: {text}"], None
             if cmd == "/nick":
+                self.nick_chosen.add(key)
                 new = clean(rest.strip())
                 self._post(room, "*", f"✎ {me} → {new}", "system")
                 u["nick"] = new
@@ -238,6 +246,12 @@ class FakeRRC:
             u = self.users.pop(key, None)
             if u:
                 self._post(u["room"], "*", f"✗ {'~' if u['mesh'] else ''}{u['nick']}", "system")
+
+    def hello(self, key):
+        """None (not asked), "done" or "required"."""
+        if not self.hello_gate:
+            return None
+        return "done" if key in self.verified and key in self.nick_chosen else "required"
 
     def poll(self, key, since):
         with self.lock:
@@ -521,7 +535,15 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0, dire
             if u.path != "/rrc/poll":
                 return self._json({"error": "not found"}, 404)
             q = parse_qs(u.query)
-            self._json(rrc.poll(self._key(), int(q.get("since", ["0"])[0])))
+            key = self._key()
+            if rrc.hello(key) == "required":    # nothing to read before the greeting
+                return self._json({"room": "main", "nick": rrc.users[key]["nick"], "rooms": [], "messages": [],
+                                   "dms": [], "users": [], "stumps": [], "renamed": {}, "hello": "required",
+                                   "topic": "Say who you are first (/auth, then /nick)."})
+            out = rrc.poll(key, int(q.get("since", ["0"])[0]))
+            if rrc.hello(key):
+                out["hello"] = rrc.hello(key)
+            self._json(out)
 
         def do_POST(self):
             u = urlparse(self.path)
@@ -587,8 +609,19 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0, dire
                 return self._json({"error": "not found"}, 404)
             n = int(self.headers.get("Content-Length", "0"))
             line = self.rfile.read(n).decode("utf-8")
-            replies, room = rrc.handle(self._key(), line)
-            self._json({"replies": replies, "room": room})
+            key = self._key()
+            rrc.sent_log.append((key, line))
+            if rrc.hello(key) == "required" and line.strip().lower().split(" ", 1)[0] not in ("/auth", "/nick", "/help", "/whoami"):
+                return self._json({"replies": ["Say who you are first (/auth, then /nick)."], "room": None,
+                                   "error": "hello_required"})
+            replies, room = rrc.handle(key, line)
+            if key in rrc.verified and key in rrc.lora_names and key not in rrc.nick_chosen:
+                rrc.nick_chosen.add(key)        # its LoRa name: /auth alone completes the greeting
+                rrc.users[key]["nick"] = rrc.lora_names[key]
+            out = {"replies": replies, "room": room}
+            if rrc.hello(key):
+                out["hello"] = rrc.hello(key)
+            self._json(out)
 
     srv = ThreadingHTTPServer((host, port), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()

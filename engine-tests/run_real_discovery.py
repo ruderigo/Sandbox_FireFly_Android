@@ -52,6 +52,7 @@ P._pc_copy_firmware(P.STUMP_APP_DIR, folder)
 cfg = open(os.path.join(STUMP, "tests", "config.py"), encoding="utf-8").read()
 cfg += P._pc_config_block({"pc_hotspot_name": "x", "pc_heltec": "none"})
 cfg += "\nNODE_NAME = 'macOS'\nPC_HTTP_PORT = %d\nPC_HOTSPOT_IP = %r\n" % (PORT, IP)
+cfg += "\nAPP_HELLO = True\n"            # the Stump's own tests switch the greeting off; a real one has it on
 open(os.path.join(folder, "config.py"), "w", encoding="utf-8").write(cfg)
 node = subprocess.Popen([sys.executable, "-u", "stump_pc.py"], cwd=folder,
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -103,8 +104,18 @@ check("...and the line that failed arrived there",
 
 check("FireFly verified itself there on its own (/auth on connecting, Stump 1.0.0-beta.25)",
       wait(lambda: (core.store.stump_node(new_key) or {}).get("auth") == "ok", 30),
-      (core.store.stump_node(new_key) or {}).get("auth"))
+      {k: (core.store.stump_node(new_key) or {}).get(k) for k in ("auth", "auth_detail")})
 check("...quietly", not any(l["body"].startswith("AUTH-") for l in lines()), [l["body"] for l in lines()])
+
+# The greeting (Stump 1.0.0-beta.31): this test shares the phone's address, so its own poll
+# reads what the Stump thinks of FireFly.
+from firefly import stump as _stump
+want = _stump.clean_nick(core.settings["display_name"])
+def as_firefly():
+    return json.loads(opener.open(f"http://{IP}:{PORT}/rrc/poll?room=main&since=0", timeout=5).read())
+check("the real Stump has FireFly's greeting: 'hello': 'done', under its own name",
+      wait(lambda: as_firefly().get("hello") in ("done", None) and as_firefly().get("nick") == want, 30),
+      {k: as_firefly().get(k) for k in ("hello", "nick", "topic")})
 
 # --- its beacon, as the Stump builds it
 sys.path[:0] = [os.path.join(STUMP, "pc", "pc_compat"), os.path.join(STUMP, "final_firmware")]

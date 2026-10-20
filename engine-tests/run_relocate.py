@@ -130,7 +130,7 @@ rows = json.loads(api.stump_nodes())
 lb = next((r for r in rows if r.get("name") == "LaBuche"), None)
 check("a LoRa-only Stump that answers on the Wi-Fi gets a Wi-Fi entry", "wifi:" + base(47661) in got, got)
 check("...one row, LoRa + Wi-Fi, opening over Wi-Fi",
-      wait(lambda: next(r for r in json.loads(api.stump_nodes()) if r.get("name") == "LaBuche")["key"] == "wifi:" + base(47661)),
+      wait(lambda: next(r for r in json.loads(api.stump_nodes()) if r.get("group") == B_LX)["key"] == "wifi:" + base(47661)),
       lb)
 r = json.loads(api.stump_find_wifi(B_LX))
 check("Find over Wi-Fi by identity", r.get("key") == "wifi:" + base(47661), r)

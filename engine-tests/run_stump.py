@@ -245,7 +245,7 @@ time.sleep(8)
 check(key not in keys(), "a hidden LoRa node stays hidden while it keeps beaconing")
 api.stump_restore_hidden()
 check(key in keys() and wkey in keys(), "'show again' brings both back")
-check(len(core.store.lines(key, v()["room"])) == mesh_lines and len(w()["lines"]) == wifi_lines,
+check(len(core.store.lines(key, v()["room"])) == mesh_lines and len(w()["lines"]) >= wifi_lines,
       "...with their history kept")
 
 print("-- remove the Wi-Fi Stump")

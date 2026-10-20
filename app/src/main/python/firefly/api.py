@@ -180,6 +180,12 @@ def settings_set(patch_json):
         c.radio.request_apply()
     if "display_name" in changed:
         c.announce()
+        nick = stump.clean_nick(c.settings["display_name"])
+        for sess in list(c.sessions.values()):          # Wi-Fi Stumps hear no announce
+            try:
+                sess.rename(nick)
+            except Exception:
+                pass
     if changed & {"auto_interface", "tcp_peers"}:
         threading.Thread(target=c.reattach_optional_interfaces, daemon=True).start()
     if changed & {"propagation_mode", "propagation_node"}:

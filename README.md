@@ -8,7 +8,7 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.10: beta, following the Stump beta (1.0.0-beta.25)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.10: beta, following the Stump beta (1.0.0-beta.31)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
@@ -42,6 +42,14 @@ Opus voice notes everywhere, and delivery with the screen locked.
   without a tap, so the Stump can join your Wi-Fi and LoRa sides into one
   person (one nick, private messages reaching you either way). Quietly: no
   line in the room, and a Stump that doesn't answer leaves no "failed".
+- **The greeting** (Stump 1.0.0-beta.31, "one person, one name"): on every
+  Wi-Fi connection FireFly says who it is before anything else, `/auth`
+  then `/nick <Your name>` (just `/auth` when the Stump already heard the
+  name on LoRa), and again whenever the Stump asks (`"hello":
+  "required"`). Until then a line you type waits and then goes out; the
+  screen keeps what it showed. A new name in Settings reaches the Wi-Fi
+  Stumps too (`/nick`). The phone is then one person on the Stump, listed
+  once under your name, with your DMs reaching you over Wi-Fi.
 - **Renames followed:** when someone changes nick (the poll's new
   `"renamed"`), their private conversation, and a block, follow the new
   name.
