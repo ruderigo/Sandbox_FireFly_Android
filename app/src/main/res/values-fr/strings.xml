@@ -346,4 +346,9 @@
     <string name="stump_dm_delete_text">La conversation avec %1$s sur ce Stump est supprimée de ce téléphone. Ils peuvent encore vous écrire, ce qui en commence une nouvelle.</string>
     <string name="stump_block_text">La conversation est supprimée, et désormais les messages privés de %1$s sur ce Stump sont ignorés sur ce téléphone, sans notification. Ils n\'en sont pas informés, et le Stump les transmet toujours : il n\'a pas de blocage à lui. Vous pouvez les débloquer dans les messages privés de ce Stump.</string>
     <string name="stump_blocked_here">Bloqués sur ce Stump</string>
+    <string name="stump_route">Messages des Stumps</string>
+    <string name="stump_route_wifi">Par Wi-Fi</string>
+    <string name="stump_route_lora">Par LoRa</string>
+    <string name="stump_route_help">Par où un Stump envoie vos messages privés quand vous êtes aussi sur son Wi-Fi. Par Wi-Fi : dans l\'appli tant qu\'elle y est connectée. Par LoRa : toujours par la radio. Vous n\'êtes listé qu\'une fois dans les deux cas.</string>
+    <string name="stump_rescue">Ce Stump est en démarrage de secours après des échecs : pas de radio, de chaîne ni de plugins pour l\'instant. La discussion par Wi-Fi fonctionne ; il revient à la normale de lui-même.</string>
 </resources>

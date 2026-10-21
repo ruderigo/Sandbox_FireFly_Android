@@ -190,6 +190,10 @@ def settings_set(patch_json):
         threading.Thread(target=c.reattach_optional_interfaces, daemon=True).start()
     if changed & {"propagation_mode", "propagation_node"}:
         c._apply_propagation_setting()
+    if "stump_prefer" in changed:                    # the route toggle: /hello again, with it
+        for sess in list(c.sessions.values()):
+            if getattr(sess, "hello_v2", False):
+                sess.greet(force=True)
     if "rnode_hosts" in changed and c.radio:
         c.radio.search_now()
     c.emit({"type": "status"})
@@ -526,8 +530,10 @@ def stump_radio(key):
     """The node's radio settings beside ours: {"node": {...} | None, "differs": [...]}."""
     from . import stump_web
     c = _need()
-    node = stump_web.node_radio(c.http, _wifi_base(key))
-    return _j({"node": node, "differs": stump_web.radio_differences(node, c.settings["radio"]) if node else []})
+    base = _wifi_base(key)
+    node = stump_web.node_radio(c.http, base)
+    return _j({"node": node, "differs": stump_web.radio_differences(node, c.settings["radio"]) if node else [],
+               "mode": stump_web.node_mode(c.http, base)})
 
 
 def stump_use_radio(key):

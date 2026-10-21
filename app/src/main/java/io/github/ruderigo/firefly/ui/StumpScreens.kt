@@ -243,6 +243,11 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             NoRadioBanner(alt, looking) { if (it != null) go(Route.Node(it)) else lookOnWifi(thenFind = true) }
         }
         if (!mesh) UpdateBanner(key, tools)
+        // A rescue start (Stump 1.0.0-beta.26): no radio, chain or plugins for now; chat over Wi-Fi.
+        if (!mesh && radio?.optString("mode") == "rescue") {
+            Text(stringResource(R.string.stump_rescue), modifier = Modifier.fillMaxWidth().background(Amber.Sidebar)
+                .padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium.copy(color = Amber.Error))
+        }
         if (!mesh) RadioMatch(radio) {
             scope.launch {
                 withContext(Dispatchers.IO) { Engine.call("stump_use_radio", key) }

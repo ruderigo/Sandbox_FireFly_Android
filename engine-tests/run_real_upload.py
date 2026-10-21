@@ -45,13 +45,22 @@ def upload(name, data):
     head = (f"POST /upload HTTP/1.1\r\nHost: {IP}:{PORT}\r\nContent-Type: application/octet-stream\r\n"
             f"Accept: application/json\r\nX-Filename: {name}\r\nContent-Length: {len(data)}\r\n"
             "Connection: close\r\n\r\n").encode("utf-8")
-    s.sendall(head + data)
+    sent_err = None
+    try:
+        s.sendall(head + data)
+    except OSError as e:
+        sent_err = e                    # the Stump may have answered early and closed: read it (as FireFly does)
     raw = b""
-    while True:
-        b = s.recv(65536)
-        if not b: break
-        raw += b
+    try:
+        while True:
+            b = s.recv(65536)
+            if not b: break
+            raw += b
+    except OSError:
+        pass
     s.close()
+    if not raw:
+        return -1, f"no answer ({sent_err})"
     headers, _, body = raw.partition(b"\r\n\r\n")
     return int(headers.split()[1]), body.decode("utf-8", "replace")
 
@@ -73,5 +82,6 @@ node.terminate()
 try: log = node.communicate(timeout=20)[0]
 except subprocess.TimeoutExpired: node.kill(); log = node.communicate()[0]
 check("no tracebacks on the Stump", "Traceback" not in log, log[log.find("Traceback"):][:1200])
+if "Traceback" in log: print("STUMPLOG", log[max(0, log.find("Traceback") - 300):][:2500])
 print("ALL PASS" if not fails else f"{fails} FAILED")
 os._exit(1 if fails else 0)

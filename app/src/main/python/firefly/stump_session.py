@@ -262,6 +262,66 @@ class WifiPipe:
                 self.session.on_http_error(f"not sent: {net_reason(str(e))}", sent=line, unsent=True)
         self.wake.set()                 # see our line / its effects on the next poll, now
 
+    def hello(self, identity, name, prefer, known_lxmf=None):
+        """/hello (Stump 1.0.0-beta.32): both sides prove who they are, in one exchange.
+        -> (outcome, answer): "done", "name" (done, but the name is someone else's),
+        "refused" (403), "forged" (the Stump's signature doesn't check out), "unsupported"
+        (an older Stump, or one without identities: use /auth + /nick), "unreachable"."""
+        def call(method, body=None):
+            for _ in range(4):
+                status, raw = self._call(method, "/hello", body, timeout_ms=8000,
+                                         content_type="application/json") if body is not None \
+                    else self._call(method, "/hello", timeout_ms=8000)
+                if status == 429 or (status == BUSY and raw.strip() == b"busy"):
+                    try:
+                        wait = float(json.loads(raw.decode("utf-8")).get("retry_after") or 2)
+                    except Exception:
+                        wait = BUSY_RETRY_S
+                    time.sleep(min(max(wait, 0.5), 10))
+                    continue
+                return status, raw
+            return status, raw
+
+        status, raw = call("GET")
+        if status < 0:
+            return "unreachable", None
+        try:
+            d = json.loads(raw.decode("utf-8")) if raw[:1] == b"{" else None
+        except Exception:
+            d = None
+        if status != 200 or not isinstance(d, dict) or not d.get("nonce"):
+            return "unsupported", d
+        nonce, lx = str(d["nonce"]), str(d.get("lxmf") or "").lower()
+        if d.get("pub") and d.get("sig"):
+            try:
+                them = RNS.Identity(create_keys=False)
+                them.load_public_key(bytes.fromhex(d["pub"]))
+                ok = them.validate(bytes.fromhex(d["sig"]), (nonce + lx).encode("ascii")) and \
+                    RNS.Destination.hash(them, "lxmf", "delivery").hex() == lx
+            except Exception:
+                ok = False
+            if not ok:
+                return "forged", d
+        elif known_lxmf:
+            return "forged", d                  # a Stump we know always signs
+        if known_lxmf and lx != known_lxmf.lower():
+            return "other", d                   # a real Stump, but another one: the router moved them
+        body = json.dumps({"pub": identity.get_public_key().hex(),
+                           "sig": identity.sign(nonce.encode("ascii")).hex(),
+                           "name": name, "prefer": prefer}).encode("utf-8")
+        status, raw = call("POST", body)
+        try:
+            a = json.loads(raw.decode("utf-8")) if raw[:1] == b"{" else {}
+        except Exception:
+            a = {}
+        if status == 200 and a.get("hello") == "done":
+            return ("name" if a.get("error") == "name" else "done"), a
+        if status == 403:
+            return "refused", a
+        if status < 0:
+            return "unreachable", a
+        return "unsupported", a
+
     def _resend_elsewhere(self, item, line):
         """Nothing answered: maybe the router gave the Stump a new address. Find it by
         its identity and send this there. A /auth isn't carried over (its challenge
@@ -399,6 +459,7 @@ class StumpSession:
             self.hello_ok.set()
         self.greeted_at = 0.0
         self.greeting_nick = None           # the /nick line we sent as part of the greeting
+        self.hello_v2 = False               # this Stump speaks /hello (beta.32)
         self.auth_quiet, self.auth_before = False, None
         self.folded = set()                 # "renamed" pairs already applied
         self.offline_reason = None          # why the last Wi-Fi poll got nothing ("connection refused"…)
@@ -579,14 +640,53 @@ class StumpSession:
             self.hello = None
             self.hello_ok.set()
 
-    def greet(self):
-        """/auth (quietly); its AUTH-OK sends /nick <our name> if the Stump still needs one."""
+    def greet(self, force=False):
+        """Say who we are: /hello (Stump 1.0.0-beta.32), else /auth (quietly) whose AUTH-OK
+        sends /nick <our name> if the Stump still needs one."""
         now = time.time()
-        if now - self.greeted_at < GREET_EVERY_S:
+        if not force and now - self.greeted_at < GREET_EVERY_S:
             return
         self.greeted_at = now
         self.auto_auth_tried = True
-        self.start_auth(quiet=True)
+        if self.pipe.kind != WIFI:
+            return self.start_auth(quiet=True)
+        threading.Thread(target=self._hello_exchange, daemon=True, name="stump-hello").start()
+
+    def _hello_exchange(self):
+        name = stump.clean_nick(self.core.settings["display_name"])
+        prefer = self.core.settings.get("stump_prefer", "wifi")
+        known = (self.store.stump_node(self.key) or {}).get("lxmf")
+        try:
+            outcome, a = self.pipe.hello(self.core.identity, name, prefer, known)
+        except Exception as e:
+            RNS.log(f"Stump /hello {self.key} failed: {e}", RNS.LOG_WARNING)
+            outcome, a = "unreachable", None
+        if self.closed:
+            return
+        if outcome in ("done", "name"):
+            self.hello_v2 = True
+            with self.lock:
+                if a.get("nick"):
+                    self.nick = str(a["nick"])
+                self._save(auth="ok", auth_detail=self.core.identity.hash.hex(),
+                           **({"nick": self.nick} if self.nick else {}))
+            self._hello_done()
+            if outcome == "name":               # greeted, but under another name: say why
+                self.store.add_line(self.key, self.room, "reply", str(a.get("message") or
+                                    f"the name {name} is someone else's on this Stump: choose another in Settings"))
+        elif outcome == "unsupported":
+            self.hello_v2 = False
+            self.start_auth(quiet=True)         # an older Stump: /auth, then /nick if it asks
+        elif outcome == "forged":
+            self._save(auth="failed", auth_detail="this Stump's signature doesn't check out: "
+                                                  "it isn't the Stump it claims to be, so FireFly didn't introduce itself")
+        elif outcome == "other":
+            self._save(auth="none", auth_detail="")
+            self.set_online(False, f"another Stump answers at this address now ({(a or {}).get('stump') or 'unknown'})")
+            threading.Thread(target=self.relocate, daemon=True).start()     # find ours by its identity
+        elif outcome == "refused":
+            self._save(auth="failed", auth_detail=str((a or {}).get("message") or "the Stump refused FireFly's signature"))
+        # "unreachable": the poll says so, and the next "required" greets again
 
     def _greeting_nick(self):
         """After AUTH-OK in a greeting: our name, unless the Stump already has it (from LoRa)."""
@@ -598,6 +698,8 @@ class StumpSession:
     def rename(self, name):
         """The user chose a new name in Settings: tell this Stump (over Wi-Fi the announce
         doesn't reach it). Over LoRa the next announce does it."""
+        if self.pipe.kind == WIFI and self.hello_v2:
+            return self.greet(force=True)       # /hello again, with the new name
         if self.pipe.kind == WIFI and self.hello is not None and name:
             self.greeting_nick = f"/nick {name}"
             self.pipe.send(self.greeting_nick, control=True)

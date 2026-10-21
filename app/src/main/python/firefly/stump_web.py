@@ -294,6 +294,14 @@ def node_radio(http, base):
         return None
 
 
+def node_mode(http, base):
+    """/node.json's "mode" (Stump 1.0.0-beta.26+): "rescue" after failed starts (no radio,
+    chain or plugins for now; it comes back by itself), else "normal" or None."""
+    data = _get_json(http, base + "/node.json")
+    m = data.get("mode") if data.get("state") == "ok" else None
+    return m if isinstance(m, str) else None
+
+
 def radio_differences(node, mine):
     """Which of the node's settings differ from ours (FireFly's names). A mismatched radio
     doesn't error; it just never hears anything."""

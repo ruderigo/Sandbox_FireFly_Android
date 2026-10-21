@@ -117,6 +117,9 @@ check("the real Stump has FireFly's greeting: 'hello': 'done', under its own nam
       wait(lambda: as_firefly().get("hello") in ("done", None) and as_firefly().get("nick") == want, 30),
       {k: as_firefly().get(k) for k in ("hello", "nick", "topic")})
 
+check("...through /hello (Stump 1.0.0-beta.32), not the /auth + /nick fallback",
+      getattr(core.sessions.get(new_key), "hello_v2", False))
+
 # --- its beacon, as the Stump builds it
 sys.path[:0] = [os.path.join(STUMP, "pc", "pc_compat"), os.path.join(STUMP, "final_firmware")]
 try:

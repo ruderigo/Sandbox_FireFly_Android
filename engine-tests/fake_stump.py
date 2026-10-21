@@ -61,6 +61,51 @@ class FakeRRC:
         self.nick_chosen = set()
         self.lora_names = {}
         self.sent_log = []              # (key, line) as /rrc/send got them
+        # /hello (Stump 1.0.0-beta.32): the greeting in one signed exchange. hello_v2 turns it
+        # on (the node then has a real identity, and node_lxmf is its LXMF address).
+        self.hello_v2 = False
+        self.node_ident = None
+        self.hello_nonces = {}
+        self.hello_log = []             # (key, "GET"|"POST", body)
+        self.prefer = {}                # key -> "wifi" | "lora"
+        self.hello_429 = 0              # answer this many /hello "429 wait"
+        self.hello_forge = False        # sign with the wrong key (an impostor)
+
+    def enable_hello(self):
+        import RNS
+        self.hello_v2 = True
+        self.node_ident = RNS.Identity()
+        self.node_lxmf = RNS.Destination.hash(self.node_ident, "lxmf", "delivery").hex()
+
+    def hello_get(self, key):
+        n = secrets.token_hex(16)
+        self.hello_nonces[key] = n
+        signer = self.node_ident
+        if self.hello_forge:
+            import RNS
+            signer = RNS.Identity()
+        return {"stump": "LaBuche Test", "lxmf": self.node_lxmf, "nonce": n,
+                "pub": self.node_ident.get_public_key().hex(),
+                "sig": signer.sign((n + self.node_lxmf).encode()).hex(), "hello": self.hello(key) or "done"}
+
+    def hello_post(self, key, d):
+        n = self.hello_nonces.pop(key, None)
+        who = self.verify(d.get("pub", ""), d.get("sig", ""), n) if n else None
+        if not who:
+            return 403, {"hello": "required", "error": "auth", "message": "AUTH-FAIL bad signature"}
+        self.verified.add(key)
+        out = {}
+        name = clean(str(d.get("name") or ""))
+        if name and any(u["nick"] == name for k, u in self.users.items() if k != key):
+            out = {"error": "name", "message": f"{name} is taken"}
+        elif name:
+            self.users[key]["nick"] = name
+        self.nick_chosen.add(key)
+        if d.get("prefer") in ("wifi", "lora"):
+            self.prefer[key] = d["prefer"]
+        out.update({"hello": self.hello(key) or "done", "nick": self.users[key]["nick"],
+                    "lxmf": "ab" * 16, "prefer": self.prefer.get(key, "wifi")})
+        return 200, out
 
     def _take_token(self, key):
         """Lines others see: 3 at once, then one every 2 s (Stump 1.0.0-beta.3's guard)."""
@@ -525,6 +570,13 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0, dire
                 self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(name)}")
                 self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
                 return
+            if u.path == "/hello" and rrc.hello_v2:
+                key = self._key()
+                rrc.hello_log.append((key, "GET", None))
+                if rrc.hello_429 > 0:
+                    rrc.hello_429 -= 1
+                    return self._json({"hello": "wait", "retry_after": 1}, 429)
+                return self._json(rrc.hello_get(key))
             if u.path == "/rrc/voice":
                 frames = rrc.voice_frames(self._key(), int(parse_qs(u.query).get("id", ["0"])[0]))
                 if frames is None:
@@ -597,6 +649,16 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0, dire
                 code, text, extra, error = web.upload(self.client_address[0], fname, data)
                 as_json = not self._old() and "application/json" in self.headers.get("Accept", "")
                 return self._result(as_json, code, text, error, extra)
+            if u.path == "/hello" and rrc.hello_v2:
+                key = self._key()
+                n = int(self.headers.get("Content-Length", "0"))
+                d = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+                rrc.hello_log.append((key, "POST", d))
+                if rrc.hello_429 > 0:
+                    rrc.hello_429 -= 1
+                    return self._json({"hello": "wait", "retry_after": 1}, 429)
+                code, out = rrc.hello_post(key, d)
+                return self._json(out, code)
             if u.path == "/rrc/voice":
                 q = parse_qs(u.query)
                 n = int(self.headers.get("Content-Length", "0"))

@@ -8,7 +8,7 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.10: beta, following the Stump beta (1.0.0-beta.31)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+Status: **0.5.0-beta.10: beta, following the Stump beta (1.0.0-beta.33)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
@@ -50,6 +50,19 @@ Opus voice notes everywhere, and delivery with the screen locked.
   screen keeps what it showed. A new name in Settings reaches the Wi-Fi
   Stumps too (`/nick`). The phone is then one person on the Stump, listed
   once under your name, with your DMs reaching you over Wi-Fi.
+- **`/hello`** (Stump 1.0.0-beta.32/33): the greeting is now one exchange
+  where both sides sign. FireFly checks the Stump's signature (and that
+  its key is the one behind its LXMF address, and the Stump it knows at
+  that address) before it introduces itself with its own signature, your
+  name and your route. An impostor gets nothing; a real but different
+  Stump at that address sends FireFly looking for yours. A 429 is waited
+  out. Older Stumps still get `/auth` + `/nick`.
+- **Route toggle,** Settings › Stump messages: **Over Wi-Fi** (in the app
+  while it's connected) or **Over LoRa** (always by radio). Changing it,
+  or your name, says `/hello` again to the Stumps you're on.
+- **Rescue start:** a Stump that says so (`/node.json` `"mode":
+  "rescue"`) gets a line on its screen: no radio, chain or plugins for
+  now, Wi-Fi chat works.
 - **Renames followed:** when someone changes nick (the poll's new
   `"renamed"`), their private conversation, and a block, follow the new
   name.
