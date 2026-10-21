@@ -38,6 +38,7 @@ object Amber {
     val LightOn = Color(0xFF5DBB63)
     val LightAttention = Color(0xFFE0483E)
     val LightOff = Color(0xFF8A8580)
+    val LightTrying = Color(0xFFF0A030)   // orange, alternating with green while connecting
 }
 
 /** System fonts only: it has to render with no internet behind it. */

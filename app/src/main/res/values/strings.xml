@@ -351,4 +351,6 @@
     <string name="stump_route_lora">Over LoRa</string>
     <string name="stump_route_help">Where a Stump sends your private messages while you\'re on its Wi-Fi too. Over Wi-Fi: in the app while it\'s connected there. Over LoRa: always by radio. You\'re listed once either way.</string>
     <string name="stump_rescue">This Stump is in a rescue start after failed starts: no radio, chain or plugins for now. Chat over Wi-Fi works; it returns to normal by itself.</string>
+    <string name="searching_now">Searching…</string>
+    <string name="connecting_rnode">Connecting…</string>
 </resources>

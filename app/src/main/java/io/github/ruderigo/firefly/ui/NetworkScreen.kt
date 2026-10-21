@@ -1,5 +1,6 @@
 package io.github.ruderigo.firefly.ui
 
+import kotlinx.coroutines.delay
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.compose.foundation.background
@@ -30,6 +31,15 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
     val r = status.optJSONObject("radio") ?: JSONObject()
     val state = r.optString("state", "off")
     val paired = settings.optJSONObject("radio")?.optJSONArray("ble_devices")?.objects() ?: emptyList()
+    // Busy: a Search now or a Use being carried out, or an RNode being connected. The buttons
+    // wait meanwhile. A press counts as busy at once, until the engine's status says so itself.
+    var pressedAt by remember { mutableStateOf(0L) }
+    var pressed by remember { mutableStateOf<String?>(null) }        // "search", or the address used
+    var recheck by remember { mutableStateOf(0) }
+    LaunchedEffect(pressedAt) { if (pressedAt > 0) { delay(2600); recheck++ } }      // look again once the grace is over
+    val trying = r.optBoolean("busy") || state == "connecting" ||
+        (recheck >= 0 && System.currentTimeMillis() - pressedAt < 2500)
+    LaunchedEffect(trying) { if (!trying) pressed = null }
     var usbWaiting by remember { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(status) {
         usbWaiting = try { Engine.links.usbNeedingPermission().map { RadioLinks.label(it) } } catch (_: Exception) { emptyList() }
@@ -69,7 +79,11 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                     KeyValue(stringResource(R.string.traffic), "↓ %s  ↑ %s".format(bytes(r.optLong("rx")), bytes(r.optLong("tx"))))
                 }
                 Row(Modifier.padding(top = 10.dp)) {
-                    Button(stringResource(R.string.search_now)) { Engine.searchRadio() }
+                    Button(stringResource(if (trying && pressed == "search") R.string.searching_now else R.string.search_now),
+                        enabled = !trying) {
+                        pressed = "search"; pressedAt = System.currentTimeMillis()
+                        Engine.searchRadio()
+                    }
                     Spacer(Modifier.width(8.dp))
                     Button(stringResource(R.string.pair_ble), primary = false) { go(Route.Pair) }
                 }
@@ -97,7 +111,14 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                         if (inUse) {
                             Text(stringResource(R.string.in_use), style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
                         } else {
-                            Button(stringResource(R.string.use_rnode)) { Engine.fire("use_ble_device", d.optString("address")) }
+                            val addr = d.optString("address")
+                            val connectingThis = trying && (pressed.equals(addr, ignoreCase = true) ||
+                                (state == "connecting" && r.optString("port").equals("ble:$addr", ignoreCase = true)))
+                            Button(stringResource(if (connectingThis) R.string.connecting_rnode else R.string.use_rnode),
+                                enabled = !trying) {
+                                pressed = addr; pressedAt = System.currentTimeMillis()
+                                Engine.fire("use_ble_device", addr)
+                            }
                         }
                         Spacer(Modifier.width(8.dp))
                         Button(stringResource(R.string.forget), primary = false) { Engine.fire("remove_ble_device", d.optString("address")) }

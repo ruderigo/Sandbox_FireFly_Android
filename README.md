@@ -25,6 +25,10 @@ Opus voice notes everywhere, and delivery with the screen locked.
   Wi-Fi; red when the Wi-Fi Stumps you have open all stopped answering;
   green otherwise. A tap still opens the Network tab.
 - The Network tab's traffic counter goes up to GB.
+- **Connecting shows:** after **Search now** or **Use**, the buttons wait
+  ("Searching…", "Connecting…" on the RNode being connected) until the
+  radio has done it, and the **LoRa** light flashes orange and green
+  meanwhile (also while an RNode is being connected on its own).
 - **Private messages on a Stump, whichever way they came** (field fix): a
   Stump reached over LoRa and Wi-Fi is one row but two entries, and a DM
   that arrived over LoRa (to the phone's old nick) was counted on the row

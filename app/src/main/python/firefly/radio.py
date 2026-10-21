@@ -55,6 +55,10 @@ class RadioManager:
         self.refusals = {}
         self.apply_at = 0.0
         self.generation = 0                # bumped by every user request; stale backoffs are dropped
+        # A request the person made (Search now, Use) is being carried out: from the press until
+        # a whole pass of the radio loop that started after it has finished. For the screen:
+        # the buttons wait, and the LoRa light flashes.
+        self.busy = False
         self.wake = threading.Event()
         self.lock = threading.Lock()
         self.running = False
@@ -77,6 +81,7 @@ class RadioManager:
         self.wake.set()
 
     def search_now(self):
+        self.busy = True
         self.generation += 1
         self.backoff.clear()
         self.refusals.clear()
@@ -86,7 +91,8 @@ class RadioManager:
     def snapshot(self):
         st = self.status
         out = {"state": st.state, "port": st.port, "detail": st.detail, "board": st.board,
-               "kind": _kind(st.port), "since": st.since, "device": self.device_name(st.port)}
+               "kind": _kind(st.port), "since": st.since, "device": self.device_name(st.port),
+               "busy": bool(self.busy)}
         i = self.iface
         if i is not None:
             out.update({
@@ -105,9 +111,12 @@ class RadioManager:
         while self.running:
             try:
                 if time.time() >= self.apply_at:
-                    before = (self.status.state, self.status.port, self.status.detail)
+                    before = (self.status.state, self.status.port, self.status.detail, self.busy)
+                    gen = self.generation
                     self._tick()
-                    if before != (self.status.state, self.status.port, self.status.detail):
+                    if self.busy and self.generation == gen:
+                        self.busy = False           # the person's request has been carried out
+                    if before != (self.status.state, self.status.port, self.status.detail, self.busy):
                         self.on_change()
             except Exception as e:           # the radio must never take the app down
                 RNS.log(f"Radio manager error: {e}", RNS.LOG_ERROR)

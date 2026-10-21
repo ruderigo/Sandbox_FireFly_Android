@@ -69,7 +69,15 @@ fun RadioIndicator(status: JSONObject, onClick: () -> Unit) {
     // LoRa: green when an RNode is online; red when it needs attention (refused, or paired
     // RNodes that don't answer); grey when there's none (radio off, none attached, connecting).
     val loraState = status.optJSONObject("radio")?.optString("state", "off") ?: "off"
-    val lora = when (loraState) {
+    // Trying to connect (a Search now or a Use, or an RNode being connected): orange and green
+    // in turn, so it's clear something is happening.
+    val trying = status.optJSONObject("radio")?.optBoolean("busy") == true || loraState == "connecting"
+    var blink by remember { mutableStateOf(false) }
+    LaunchedEffect(trying) {
+        blink = false
+        while (trying) { kotlinx.coroutines.delay(500); blink = !blink }
+    }
+    val lora = if (trying) (if (blink) Amber.LightOn else Amber.LightTrying) else when (loraState) {
         "online" -> Amber.LightOn
         "refused", "searching" -> Amber.LightAttention
         else -> Amber.LightOff

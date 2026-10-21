@@ -240,6 +240,7 @@ def radio_search_now():
     c = _need()
     if c.radio:
         c.radio.search_now()
+        c.emit({"type": "status"})              # "busy" right away: the button waits, the light flashes
 
 
 BLE_PORT_PREFIX = "ble:"
@@ -258,6 +259,7 @@ def use_ble_device(address):
     c = _need()
     if c.radio:
         c.radio.use(BLE_PORT_PREFIX + str(address).upper())
+        c.emit({"type": "status"})
 
 
 def remove_ble_device(address):
