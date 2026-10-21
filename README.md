@@ -8,10 +8,34 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0-beta.10: beta, following the Stump beta (1.0.0-beta.33)** ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
-Stable releases: [FireFly-Android](https://github.com/ruderigo/FireFly-Android). Built and field-tested: BLE and USB
+Status: **0.5.0: one person on a Stump, over LoRa and Wi-Fi** (for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
-Opus voice notes everywhere, and delivery with the screen locked.
+Opus voice notes everywhere, and delivery with the screen locked. Betas are
+made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
+alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.0: one person on a Stump, over LoRa and Wi-Fi
+Everything from the ten betas below, in short:
+- **The greeting:** on a Stump's Wi-Fi FireFly says who it is by itself
+  (`/hello`, both sides signing; `/auth` + `/nick` on older Stumps), so you
+  are one person there, under your name, with your DMs reaching you over
+  Wi-Fi or LoRa as you choose (Settings › Stump messages).
+- **Stumps found by who they are, not where they are:** Find Stumps asks
+  the Wi-Fi (`STUMP?`), a Stump the router moved is followed to its new
+  address with its history, and the gateway of a home Wi-Fi is no longer
+  taken for a Stump.
+- **No radio, no dead ends:** a Stump reached over LoRa and Wi-Fi opens on
+  the side that can reach it; real reasons instead of "-1" or a false
+  "too fast"; Verify that can't succeed says why at once.
+- **Private messages:** one conversation per person across LoRa and Wi-Fi,
+  renames followed, Delete and Block.
+- **Screens:** LoRa and Wi-Fi lights (green, red, grey; orange-green while
+  connecting), a steady Stumps list, Stump over Wi-Fi in the Network tab,
+  the RNode in use named, Use to switch RNodes, the version in Settings.
+- **Stump 1.0.0-beta.19 to beta.33:** room renames, hybrid and closed
+  access, busy Stumps (503), upload limits, rescue starts.
+- From 0.4.1: local-network discovery on Android, message states that no
+  longer get stuck.
 
 ### 0.5.0-beta.10: a steadier Stumps tab, two connection lights
 - **The Stumps list keeps still:** it's sorted by name. It was sorted by
@@ -73,7 +97,7 @@ Opus voice notes everywhere, and delivery with the screen locked.
 - **A busy Stump** (`503`, Stump 1.0.0-beta.24's connection limits): FireFly
   waits 2 s and asks again, instead of calling it offline or losing a line.
 
-### Checked against checked against Stump 1.0.0-beta.22 and beta.23
+### Checked against Stump 1.0.0-beta.22 and beta.23
 Nothing a client reads changed (beta.22 and beta.23 are about a computer
 Stump's storage and stopping). Computer Stumps now accept uploads, so
 FireFly's Files tab can upload to a Stump on a Mac or PC:
@@ -292,6 +316,23 @@ change also works with an older node, and the tests run both.
   signed with the same key. Versions compare as the node compares them, so
   `0.5.0` beats `0.5.0-beta.1`.
 - Tags with a suffix (`v0.5.0-beta.1`) publish as GitHub pre-releases.
+
+### 0.4.1: local-network discovery and stuck message states fixed
+- **Wi-Fi peers are found again.** "Local network" (Reticulum's AutoInterface)
+  failed on any network with IPv6, which is nearly every Wi-Fi: Android's
+  Python has no `socket.if_nametoindex`, and the fallback asked Reticulum's
+  netinfo, which on Android needs that same function and returned nothing
+  ("required argument is not an integer"). FireFly now asks the C library
+  directly, then `/sys/class/net`. Found by the new CI;
+  `engine-tests/run_autointerface.py` now checks the lookup on every interface.
+- **Messages no longer get stuck at "sent" or "sending".** A message left at a
+  propagation node could show "sent" forever although the node had it (and
+  the friend received it), and a direct message could stay at "sending" the
+  same way: the outbound monitor could write over the final state if it had
+  listed the message just before delivery. It now only writes while the
+  message is still in flight. Seen about once in 16 runs of
+  `run_propagation.py`; `run_outbound_race.py` forces the timing.
+- Engine tests and a debug build run on every push and pull request.
 
 ### 0.4.0: Board and Files, over a Stump's Wi-Fi
 - **Board tab** on a Stump joined over Wi-Fi: the node's billboard from

@@ -605,9 +605,9 @@ class Core:
 
     def _on_delivered(self, msg_id, lxm):
         state = "stored" if lxm.method == LXMessage.PROPAGATED else "delivered"
-        self.store.update_message(msg_id, state=state, method=_method_name(lxm.method))
-        with self.lock:
+        with self.lock:                         # out of outbound first: see _monitor_outbound
             self.outbound.pop(msg_id, None)
+            self.store.update_message(msg_id, state=state, method=_method_name(lxm.method))
 
     def _on_failed(self, msg_id, lxm, peer_hex, text, title, allow_propagation, audio=None):
         with self.lock:
@@ -636,9 +636,19 @@ class Core:
         for msg_id, lxm in items:
             st = names.get(lxm.state)
             if st:
-                row = self.store.message(msg_id)
-                if row and row["state"] != st:
-                    self.store.update_message(msg_id, state=st)
+                # Under the lock, and only while the message is still outbound:
+                # _on_delivered/_on_failed take it out of self.outbound under the
+                # same lock before writing the final state. Without this, a pass
+                # that read the list just before delivery could overwrite
+                # "stored" with "sent" (LXMF leaves a propagated message in SENT
+                # when it calls the delivery callback), and nothing would ever
+                # correct it.
+                with self.lock:
+                    if self.outbound.get(msg_id) is not lxm:
+                        continue
+                    row = self.store.message(msg_id)
+                    if row and row["state"] != st:
+                        self.store.update_message(msg_id, state=st)
 
     # ================================================================ receiving
     def _on_message(self, lxm):
@@ -1072,19 +1082,45 @@ def _clean_address(hex_addr):
 def _auto_interface_class():
     """AutoInterface, able to run on Python builds without socket.if_nametoindex.
 
-    Chaquopy's Python lacks it. AutoInterface already has a second way to get
-    an interface index (Reticulum's own netinfo, used on Windows); this uses
-    it whenever the socket function is missing. A subclass, not a patch.
+    Chaquopy's Python lacks it. Reticulum's netinfo is no way around that on
+    Linux/Android: it gets its indexes from socket.if_nametoindex too, and gives
+    None without it. So this asks the C library directly (Android's Bionic has
+    if_nametoindex), then sysfs. A subclass, not a patch.
     """
     from RNS.Interfaces.AutoInterface import AutoInterface
 
     class FireFlyAutoInterface(AutoInterface):
         def interface_name_to_index(self, ifname):
-            if hasattr(socket, "if_nametoindex"):
-                return socket.if_nametoindex(ifname)
-            return self.netinfo.interface_names_to_indexes()[ifname]
+            return _interface_index(ifname)
 
     return FireFlyAutoInterface
+
+
+_libc_if_nametoindex = None
+
+
+def _interface_index(ifname):
+    """Interface index for ifname, with or without socket.if_nametoindex."""
+    if hasattr(socket, "if_nametoindex"):
+        return socket.if_nametoindex(ifname)
+    global _libc_if_nametoindex
+    try:
+        if _libc_if_nametoindex is None:
+            import ctypes, ctypes.util
+            libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so", use_errno=True)
+            fn = libc.if_nametoindex
+            fn.argtypes, fn.restype = [ctypes.c_char_p], ctypes.c_uint
+            _libc_if_nametoindex = fn
+        index = _libc_if_nametoindex(ifname.encode())
+        if index:
+            return int(index)
+    except (OSError, AttributeError):
+        pass
+    try:
+        with open(f"/sys/class/net/{ifname}/ifindex") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        raise OSError(f"no interface index for {ifname}")
 
 
 def _write_rns_config(settings, config_dir):
