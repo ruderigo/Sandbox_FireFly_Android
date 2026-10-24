@@ -353,4 +353,7 @@
     <string name="stump_rescue">Ce Stump est en démarrage de secours après des échecs : pas de radio, de chaîne ni de plugins pour l\'instant. La discussion par Wi-Fi fonctionne ; il revient à la normale de lui-même.</string>
     <string name="searching_now">Recherche…</string>
     <string name="connecting_rnode">Connexion…</string>
+    <string name="tab_not_over_lora">N/D en LoRa</string>
+    <string name="tab_board_off">Ce Stump n\'a pas de babillard</string>
+    <string name="tab_files_off">Ce Stump ne partage pas de fichiers</string>
 </resources>

@@ -2,6 +2,12 @@
 
 package io.github.ruderigo.firefly.ui
 
+import kotlinx.coroutines.delay
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.res.painterResource
@@ -287,45 +293,80 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         val shown = if (tab == "room" || offered[tab] == true) tab else "room"   // a tab whose feature turned out off
         val tabDescriptions = mapOf("dm" to stringResource(R.string.private_tab, unread),
             "board" to stringResource(R.string.tab_board), "files" to stringResource(R.string.tab_files))
-        Row(Modifier.fillMaxWidth().background(Amber.Sidebar).height(IntrinsicSize.Min)) {
-            Column(Modifier.weight(1f).fillMaxHeight().clickable { tab = "room" }, horizontalAlignment = Alignment.Start) {
-                // "#room (topic)", from the left; too long for the half, it scrolls by itself so it
-                // can be read through, left to right.
-                val topic = view.optString("topic").takeIf { it.isNotBlank() && it != "null" }
-                val roomColor = if (shown == "room") Amber.Ember else Amber.Muted
-                Text(buildAnnotatedString {
-                        withStyle(SpanStyle(color = roomColor)) { append("#" + view.optString("room", "…")) }
-                        if (topic != null) withStyle(SpanStyle(color = Amber.Dim, fontWeight = FontWeight.Normal)) { append("  ($topic)") }
-                    },
-                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
-                        .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500, repeatDelayMillis = 2500),
-                    maxLines = 1, style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.fillMaxWidth().height(2.dp).background(if (shown == "room") Amber.Ember else Amber.Sidebar))
+        // A tap on a dimmed tab: the underline goes there (300 ms), a note says why it can't open
+        // (600 ms), and it comes back to the room, which opens.
+        var bounce by remember(key) { mutableStateOf<String?>(null) }
+        var notice by remember(key) { mutableStateOf<String?>(null) }
+        val whyNot = mapOf(
+            "board" to stringResource(if (mesh) R.string.tab_not_over_lora else R.string.tab_board_off),
+            "files" to stringResource(if (mesh) R.string.tab_not_over_lora else R.string.tab_files_off))
+        fun refuse(id: String) {
+            if (bounce != null) return
+            scope.launch {
+                bounce = id
+                delay(300)
+                notice = whyNot[id]
+                delay(600)
+                notice = null
+                bounce = null
+                tab = "room"
             }
-            Row(Modifier.weight(1f)) {
-                iconTabs.forEach { (id, icons, isNew) ->
-                    val accent = if (id == "dm") Amber.DmNick else Amber.Ember
-                    val available = offered[id] == true
-                    val color = when { !available -> Amber.Border; shown == id -> accent; isNew -> accent; else -> Amber.Muted }
-                    Column(Modifier.weight(1f).fillMaxHeight().clickable(enabled = available) { tab = id }
-                        .semantics { contentDescription = tabDescriptions.getValue(id) },
-                        horizontalAlignment = Alignment.CenterHorizontally) {
-                        Spacer(Modifier.weight(1f))
-                        androidx.compose.material3.Icon(
-                            painterResource(if (isNew) icons.second else icons.first), contentDescription = null,
-                            tint = color, modifier = Modifier.size(22.dp))
-                        Spacer(Modifier.weight(1f))
-                        Box(Modifier.fillMaxWidth().height(2.dp).background(if (shown == id) accent else Amber.Sidebar))
+        }
+        val under = bounce ?: shown                     // where the underline is
+        BoxWithConstraints(Modifier.fillMaxWidth().background(Amber.Sidebar)) {
+            val half = maxWidth / 2
+            val slot = half / iconTabs.size
+            val index = iconTabs.indexOfFirst { it.first == under }
+            val lineStart by animateDpAsState(if (index < 0) 0.dp else half + slot * index, tween(220), label = "tab line")
+            val lineWidth by animateDpAsState(if (index < 0) half else slot, tween(220), label = "tab width")
+            val lineColor by animateColorAsState(if (under == "dm") Amber.DmNick else Amber.Ember, tween(220), label = "tab colour")
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(bottom = 2.dp)) {
+                Box(Modifier.weight(1f).fillMaxHeight().clickable { tab = "room" }, contentAlignment = Alignment.CenterStart) {
+                    // "#room (topic)", from the left; too long for the half, it scrolls by itself so it
+                    // can be read through, left to right.
+                    val topic = view.optString("topic").takeIf { it.isNotBlank() && it != "null" }
+                    val roomColor = if (under == "room") Amber.Ember else Amber.Muted
+                    Text(buildAnnotatedString {
+                            withStyle(SpanStyle(color = roomColor)) { append("#" + view.optString("room", "…")) }
+                            if (topic != null) withStyle(SpanStyle(color = Amber.Dim, fontWeight = FontWeight.Normal)) { append("  ($topic)") }
+                        },
+                        modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
+                            .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500, repeatDelayMillis = 2500),
+                        maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                }
+                Row(Modifier.weight(1f)) {
+                    iconTabs.forEach { (id, icons, isNew) ->
+                        val accent = if (id == "dm") Amber.DmNick else Amber.Ember
+                        val available = offered[id] == true
+                        val color = when { !available -> Amber.Border; under == id -> accent; isNew -> accent; else -> Amber.Muted }
+                        Box(Modifier.weight(1f).fillMaxHeight()
+                            .clickable { if (available) tab = id else refuse(id) }
+                            .semantics { contentDescription = tabDescriptions.getValue(id) + if (available) "" else ", " + whyNot[id] },
+                            contentAlignment = Alignment.Center) {
+                            androidx.compose.material3.Icon(
+                                painterResource(if (isNew) icons.second else icons.first), contentDescription = null,
+                                tint = color, modifier = Modifier.size(22.dp))
+                        }
                     }
                 }
             }
+            Box(Modifier.align(Alignment.BottomStart).offset(x = lineStart).width(lineWidth).height(2.dp).background(lineColor))
         }
-        when (shown) {
-            "dm" -> PrivatePane(key, view, threads, mesh, go)
-            "board" -> BoardPane(key, board) { board = it }
-            "files" -> FilesPane(key, shelf) { shelf = it }
-            else -> RoomPane(key, view, mesh, plugins)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.fillMaxSize()) {
+                when (shown) {
+                    "dm" -> PrivatePane(key, view, threads, mesh, go)
+                    "board" -> BoardPane(key, board) { board = it }
+                    "files" -> FilesPane(key, shelf) { shelf = it }
+                    else -> RoomPane(key, view, mesh, plugins)
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(visible = notice != null, enter = fadeIn(tween(120)),
+                exit = fadeOut(tween(150)), modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp)) {
+                Text(notice ?: "", modifier = Modifier.clip(Medium).background(Amber.Panel)
+                    .border(1.dp, Amber.Border, Medium).padding(horizontal = 14.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge.copy(color = Amber.Text))
+            }
         }
     }
 }

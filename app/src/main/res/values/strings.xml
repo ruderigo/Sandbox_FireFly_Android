@@ -353,4 +353,7 @@
     <string name="stump_rescue">This Stump is in a rescue start after failed starts: no radio, chain or plugins for now. Chat over Wi-Fi works; it returns to normal by itself.</string>
     <string name="searching_now">Searching…</string>
     <string name="connecting_rnode">Connecting…</string>
+    <string name="tab_not_over_lora">N/A over LoRa</string>
+    <string name="tab_board_off">This Stump has no billboard</string>
+    <string name="tab_files_off">This Stump shares no files</string>
 </resources>

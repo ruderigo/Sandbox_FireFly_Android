@@ -22,6 +22,10 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - **The room tab reads `#room (topic)`,** from the left; when it's longer
   than its half, it scrolls by itself so it can be read through. (The
   topic's own line above the chat is gone: it's in the tab.)
+- **A dimmed tab says why:** tapped over LoRa, the underline slides to it,
+  stays 300 ms, "N/A over LoRa" shows for 600 ms, and it slides back to the
+  room (on Wi-Fi, a Stump without a billboard or files says so instead).
+  One underline now moves between the tabs.
 - **Outline: nothing new. Filled: something new.** The envelope fills when
   a private message is unread (no count). The billboard and files icons
   have the same two forms, ready for "new notices" and "new files" later.
