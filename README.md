@@ -8,11 +8,21 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.5** (sandbox, for Stump 1.0.0-beta.38; the stable release is 0.5.0). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.6** (sandbox, for Stump 1.0.0-beta.38; the stable release is 0.5.0). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1-beta.6: LoRa billboard answers stay in the Board tab (field fix)
+- Reported: after a long post over LoRa, the answer to opening a notice
+  (`#568944` with its title and text) showed up in the room. It came back
+  after FireFly had stopped waiting (2 min), or while it waited for another
+  answer. Now each request (the list, each notice, a post) is waited for on
+  its own, and answers are recognised by their shape, in any order, up to
+  30 minutes late. "No answer yet" still shows after 2 minutes.
+- The post form shows its size on air (one packet, or several through a
+  link): a long notice takes a while over LoRa.
 
 ### 0.5.1-beta.5: the billboard over LoRa (Stump 1.0.0-beta.38)
 - **A LoRa Board tab.** Over LoRa only, the billboard icon now opens: the

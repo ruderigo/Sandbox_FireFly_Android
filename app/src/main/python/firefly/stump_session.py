@@ -463,7 +463,9 @@ class StumpSession:
         # The billboard over LoRa (Stump 1.0.0-beta.38): asked with /board, read from its answer.
         self.board_lora = {"state": "idle", "q": "", "posts": [], "items": {}, "at": 0.0,
                            "item": None, "post": {"state": "idle"}}
-        self.board_pending = None           # ("list" | "item" | "post", arg, when asked)
+        # What we asked and haven't had an answer to: answers over LoRa can come late and in
+        # any order, so each is recognised by its shape, not by being the last thing asked.
+        self.board_asked = {"list": None, "items": {}, "post": None}     # (arg, when) / {id: when}
         self.bots = set()                   # nicks whose lines are a bot's ("bot": true, beta.36): no DMs to them
         self.auth_quiet, self.auth_before = False, None
         self.folded = set()                 # "renamed" pairs already applied
@@ -577,13 +579,23 @@ class StumpSession:
         self.last_command_at = time.time()
         self.pipe.send(line, control=line.startswith("/auth"))
 
-    BOARD_WAIT_S = 120                  # an answer over LoRa can take a while
+    BOARD_WAIT_S = 120                  # after this, the tab says "no answer yet" (it's still taken)
+    BOARD_KEEP_S = 30 * 60              # an answer this late is still recognised (LoRa, a long post)
+
+    @property
+    def board_pending(self):
+        """The oldest request still waiting, for the tab: ("list" | "item" | "post", arg, when) or None."""
+        a = self.board_asked
+        waiting = ([("list", a["list"][0], a["list"][1])] if a["list"] else []) + \
+                  [("item", pid, t) for pid, t in a["items"].items()] + \
+                  ([("post", a["post"][0], a["post"][1])] if a["post"] else [])
+        return min(waiting, key=lambda w: w[2]) if waiting else None
 
     def board_request(self, q=""):
         """/board [words]: the newest notices (at most 5), their titles."""
         q = " ".join(str(q or "").split())
         with self.lock:
-            self.board_pending = ("list", q, time.time())
+            self.board_asked["list"] = (q, time.time())
             self.board_lora.update(state="waiting", q=q, at=time.time())
         self.pipe.send(f"/board {q}".rstrip())
         self.core.emit({"type": "changed"})
@@ -592,7 +604,7 @@ class StumpSession:
         """/board <id>: one notice, its title and body."""
         pid = str(pid).lstrip("#")
         with self.lock:
-            self.board_pending = ("item", pid, time.time())
+            self.board_asked["items"][pid] = time.time()
             self.board_lora["item"] = pid
         self.pipe.send(f"/board {pid}")
         self.core.emit({"type": "changed"})
@@ -604,59 +616,76 @@ class StumpSession:
         if not title:
             return False
         with self.lock:
-            self.board_pending = ("post", title, time.time())
+            self.board_asked["post"] = (title, time.time())
             self.board_lora["post"] = {"state": "waiting", "title": title}
         self.pipe.send(f"/post {title} | {body}" if body else f"/post {title}")
         self.core.emit({"type": "changed"})
         return True
 
     def _board_answer(self, content):
-        """An LXMF batch that answers our pending /board or /post: consumed (not a room line).
-        -> True if it was one."""
-        pend = self.board_pending
-        if not pend or time.time() - pend[2] > self.BOARD_WAIT_S:
+        """An LXMF batch that answers one of our /board or /post requests, whichever and however
+        late (within BOARD_KEEP_S): consumed, not a room line. -> True if it was one."""
+        now = time.time()
+        a = self.board_asked
+        if a["list"] and now - a["list"][1] > self.BOARD_KEEP_S:
+            a["list"] = None
+        if a["post"] and now - a["post"][1] > self.BOARD_KEEP_S:
+            a["post"] = None
+        for pid in [p for p, t in a["items"].items() if now - t > self.BOARD_KEEP_S]:
+            del a["items"][pid]
+        if not (a["list"] or a["items"] or a["post"]):
             return False
-        lines = [l for l in str(content or "").split("\n")]
-        nonblank = [l for l in lines if l.strip()]
+        lines = str(content or "").split("\n")
+        nonblank = [l.strip() for l in lines if l.strip()]
         if not nonblank:
             return False
-        first = nonblank[0].strip()
-        low = first.lower()
-        kind, arg, _ = pend
+        first, low = nonblank[0], nonblank[0].lower()
         b = self.board_lora
-        if kind == "list":
-            if all(stump.BOARD_LINE.match(l.strip()) for l in nonblank):
-                b.update(state="ok", posts=[{"id": m.group(1), "title": m.group(2)}
-                                            for m in (stump.BOARD_LINE.match(l.strip()) for l in nonblank)],
-                         at=time.time())
-            elif any(x in low for x in stump.BOARD_OFF):
-                b.update(state="off", posts=[], at=time.time())
-            elif any(x in low for x in stump.BOARD_NOTHING):
-                b.update(state="empty", posts=[], at=time.time())
-            else:
-                return False
-        elif kind == "item":
-            m = stump.BOARD_LINE.match(first)
-            if m and (m.group(1).startswith(arg) or arg.startswith(m.group(1))):
-                body = "\n".join(lines[lines.index(nonblank[0]) + 1:]).strip()
-                b["items"][arg] = {"id": arg, "title": m.group(2), "body": body}
-            elif any(x in low for x in stump.BOARD_GONE) and arg in first:
-                b["items"][arg] = {"id": arg, "gone": True}
-            elif any(x in low for x in stump.BOARD_OFF):
-                b.update(state="off")
-            else:
-                return False
-        else:                                   # post: "✓ #id", or the reason it wasn't
-            m = stump.POST_OK.match(first)
-            if m:
-                b["post"] = {"state": "ok", "id": m.group(1), "title": arg}
-            elif len(nonblank) == 1 and not first.startswith(("<", "[DM]", "*", "✓ ", "✗ ", "→ ", "✎ ")):
-                b["post"] = {"state": "refused", "message": first, "title": arg}
-            else:
-                return False
-        self.board_pending = None
-        self.core.emit({"type": "changed"})
-        return True
+        m = stump.BOARD_LINE.match(first)
+
+        def item_for(found):
+            return next((p for p in a["items"] if p.startswith(found) or found.startswith(p)), None)
+
+        done = False
+        if a["post"] and stump.POST_OK.match(first):                       # "✓ #id": our post is in
+            b["post"] = {"state": "ok", "id": stump.POST_OK.match(first).group(1), "title": a["post"][0]}
+            a["post"] = None
+            done = True
+        elif a["list"] and all(stump.BOARD_LINE.match(l) for l in nonblank) and \
+                (len(nonblank) > 1 or not item_for(m.group(1))):            # the titles (every line one)
+            b.update(state="ok", posts=[{"id": x.group(1), "title": x.group(2)}
+                                        for x in (stump.BOARD_LINE.match(l) for l in nonblank)], at=now)
+            a["list"] = None
+            done = True
+        elif m and item_for(m.group(1)):                                  # "#id title" + its text
+            pid = item_for(m.group(1))
+            start = next(i for i, l in enumerate(lines) if l.strip())
+            b["items"][pid] = {"id": pid, "title": m.group(2), "body": "\n".join(lines[start + 1:]).strip()}
+            del a["items"][pid]
+            done = True
+        elif any(x in low for x in stump.BOARD_GONE) and any(p in first for p in a["items"]):
+            pid = next(p for p in a["items"] if p in first)
+            b["items"][pid] = {"id": pid, "gone": True}
+            del a["items"][pid]
+            done = True
+        elif any(x in low for x in stump.BOARD_OFF):
+            b.update(state="off", posts=[], at=now)
+            a.update(list=None, post=None, items={})
+            done = True
+        elif a["list"] and any(x in low for x in stump.BOARD_NOTHING):
+            b.update(state="empty", posts=[], at=now)
+            a["list"] = None
+            done = True
+        elif a["post"] and len(nonblank) == 1 and not m and \
+                not first.startswith(("<", "[DM]", "*", "✓ ", "✗ ", "→ ", "✎ ", "=", "?", "⊖", "⊘")):
+            b["post"] = {"state": "refused", "message": first, "title": a["post"][0]}  # why it wasn't posted
+            a["post"] = None
+            done = True
+        if done:
+            if b.get("state") == "waiting" and not a["list"]:
+                b["state"] = "ok" if b.get("posts") else b.get("state")
+            self.core.emit({"type": "changed"})
+        return done
 
     def send_dm(self, nick, text):
         nick, text = nick.strip().lstrip("~"), text.strip()

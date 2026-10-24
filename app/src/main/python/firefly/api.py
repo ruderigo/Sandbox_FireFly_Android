@@ -642,13 +642,15 @@ def stump_board_lora_view(key):
     c = _need()
     sess = c.session(_lora_key(c, key))
     b = dict(sess.board_lora)
+    asked, now = sess.board_asked, time.time()
     pend = sess.board_pending
-    b["waiting_s"] = int(time.time() - pend[2]) if pend else None
-    if pend and time.time() - pend[2] > sess.BOARD_WAIT_S:          # no answer: say so
-        if pend[0] == "list":
-            b["state"] = "no_answer"
-        elif pend[0] == "post":
-            b["post"] = {"state": "no_answer", "title": pend[1]}
+    b["waiting_s"] = int(now - pend[2]) if pend else None
+    # No answer yet after 2 min: said, though a later answer is still taken when it comes.
+    if asked["list"] and now - asked["list"][1] > sess.BOARD_WAIT_S and b.get("state") == "waiting":
+        b["state"] = "no_answer"
+    if asked["post"] and now - asked["post"][1] > sess.BOARD_WAIT_S:
+        b["post"] = {"state": "no_answer", "title": asked["post"][0]}
+    b["items_waiting"] = sorted(asked["items"])
     return _j(b)
 
 

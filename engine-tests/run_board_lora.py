@@ -72,6 +72,37 @@ check("a room line meanwhile stays a room line", view()["state"] == "waiting" an
 sess.on_mesh_content("no billboard on this Stump")
 check("billboard switched off: off", view()["state"] == "off")
 
+# The field case (Oct 24): a long post went out slowly; meanwhile the list was asked again and
+# a notice opened. The answers come back late and out of order: each goes where it belongs,
+# none into the room.
+sess.board_asked = {"list": None, "items": {}, "post": None}
+api.stump_board_lora_post(K, "8011001", "6000" + "10" * 250)
+api.stump_board_lora(K)
+api.stump_board_lora_item(K, "568944")
+for k in ("list", "post"):
+    sess.board_asked[k] = (sess.board_asked[k][0], time.time() - 400)        # 6+ min ago: late
+sess.board_asked["items"]["568944"] = time.time() - 400
+check("after 2 min the tab says 'no answer yet'", view()["state"] == "no_answer" and view()["post"]["state"] == "no_answer")
+before = len(room())
+sess.on_mesh_content("#568944 8011001\n6000" + "10" * 250)                 # the notice's answer first
+sess.on_mesh_content("\u2713 #568944")                                       # then the post's
+sess.on_mesh_content("#568944 8011001\n#482193 Marché samedi")               # then the list's
+v = view()
+check("late, out of order: the notice's text is the notice's", v["items"].get("568944", {}).get("body", "").startswith("6000"), v["items"].get("568944"))
+check("...the ✓ is the post's", v["post"].get("state") == "ok" and v["post"].get("id") == "568944", v["post"])
+check("...the titles are the list's", v["state"] == "ok" and [p["id"] for p in v["posts"]] == ["568944", "482193"], v)
+check("...and nothing of it lands in the room", len(room()) == before, room()[before:])
+check("...nothing left waiting", sess.board_pending is None and view()["items_waiting"] == [])
+
+# The list arriving while a notice is awaited, and starting with that notice: still the list.
+api.stump_board_lora(K)
+api.stump_board_lora_item(K, "900001")
+sess.on_mesh_content("#900001 Pain frais\n#482193 Marché samedi")
+check("the list first, though it starts with an awaited notice: the list",
+      [p["id"] for p in view()["posts"]] == ["900001", "482193"] and "900001" in view()["items_waiting"], view())
+sess.on_mesh_content("#900001 Pain frais\nDès 7 h.")
+check("...then the notice's own answer: the notice", view()["items"].get("900001", {}).get("body") == "Dès 7 h.")
+
 # Radio down: the line is kept, not 'not sent'.
 sess.post("for the radio room")
 sess.on_mesh_content("⧗ — the radio has been down for 4 min: your message will go out when it's back (kept up to an hour)")

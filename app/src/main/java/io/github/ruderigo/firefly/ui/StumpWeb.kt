@@ -1,5 +1,6 @@
 package io.github.ruderigo.firefly.ui
 
+import io.github.ruderigo.firefly.engine.strings
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -499,6 +500,7 @@ fun ColumnScope.LoraBoardPane(loraKey: String, b: JSONObject) {
     val asking = state == "waiting"
     val post = b.optJSONObject("post") ?: JSONObject()
     val posting = post.optString("state") == "waiting"
+    val waitingFor = b.optJSONArray("items_waiting")?.strings()?.toSet() ?: emptySet()     // notices asked, not answered yet
     LaunchedEffect(loraKey) { if (state == "idle") Engine.fire("stump_board_lora", loraKey, "") }     // first look
     // A notice just posted: the list again, with it.
     LaunchedEffect(post.optString("state"), post.optString("id")) {
@@ -520,7 +522,7 @@ fun ColumnScope.LoraBoardPane(loraKey: String, b: JSONObject) {
             Column(Modifier.fillMaxWidth().clickable {
                     open = if (open == id) null else id
                     // its text, asked once (not again while that answer is on its way)
-                    if (open == id && notice == null && b.optString("item") != id) Engine.fire("stump_board_lora_item", loraKey, id)
+                    if (open == id && notice == null && !waitingFor.contains(id)) Engine.fire("stump_board_lora_item", loraKey, id)
                 }.padding(horizontal = 12.dp, vertical = 10.dp)) {
                 Text(p.optString("title"), style = MaterialTheme.typography.titleSmall)
                 if (open == id) {
@@ -551,8 +553,11 @@ fun ColumnScope.LoraBoardPane(loraKey: String, b: JSONObject) {
         Field(body, { body = it.take(BODY_MAX) }, Modifier.fillMaxWidth().heightIn(min = 44.dp, max = 140.dp),
             hint = stringResource(R.string.board_body_hint), singleLine = false)
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("${title.length}/$TITLE_MAX · ${body.length}/$BODY_MAX", style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.weight(1f).padding(start = 4.dp))
+            Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                Text("${title.length}/$TITLE_MAX · ${body.length}/$BODY_MAX", style = MaterialTheme.typography.labelSmall)
+                // Over LoRa, size is airtime: one packet, or several (slower, through a link).
+                if (title.isNotBlank()) PacketCounter(if (body.isBlank()) "/post $title" else "/post $title | $body")
+            }
             Button(stringResource(if (posting) R.string.board_posting else R.string.board_post_lora),
                 enabled = title.isNotBlank() && !posting) {
                 Engine.fire("stump_board_lora_post", loraKey, title, body)
