@@ -185,8 +185,14 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
     // Billboard and files: Wi-Fi only, read once when the node opens (and on Refresh),
     // not on every chat change. Opened over LoRa, they come from the same Stump's Wi-Fi side
     // whenever it answers (the phone joined its Wi-Fi meanwhile), and go when it doesn't.
-    val webKey = if (!mesh) key else view.optString("wifi_alt")
-        .takeIf { it.isNotBlank() && it != "null" && view.optBoolean("wifi_alt_online") }
+    // Only while the phone is on a Wi-Fi and that side answers: opened over Wi-Fi and moved
+    // onto LoRa (Wi-Fi off, out of range), the billboard and files go too.
+    val onWifi = WifiHttp.local.collectAsState().value != null
+    val webKey = when {
+        !onWifi -> null
+        !mesh -> key.takeIf { view.optInt("online", 1) == 1 }
+        else -> view.optString("wifi_alt").takeIf { it.isNotBlank() && it != "null" && view.optBoolean("wifi_alt_online") }
+    }
     var board by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
     var shelf by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
     var plugins by remember(key) { mutableStateOf<JSONObject?>(null) }     // its !commands
@@ -310,17 +316,33 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         val whyNot = mapOf(
             "board" to stringResource(if (webKey == null) R.string.tab_not_over_lora else R.string.tab_board_off),
             "files" to stringResource(if (webKey == null) R.string.tab_not_over_lora else R.string.tab_files_off))
-        fun refuse(id: String) {
-            if (bounce != null) return
+        fun refuse(id: String, why: String? = null) {
+            if (bounce != null && bounce != id) return
             scope.launch {
                 bounce = id
                 delay(300)
-                notice = whyNot[id]
+                notice = why ?: whyNot[id]
                 delay(600)
                 notice = null
                 bounce = null
                 tab = "room"
             }
+        }
+        val gone = stringResource(R.string.tab_not_over_lora)
+        // An offered billboard or files: check the Stump still answers on the Wi-Fi (the phone
+        // may have just left it); the underline goes there while it asks.
+        fun open(id: String) {
+            if (id == "dm" || bounce != null) { tab = id; return }
+            val web = webKey ?: return refuse(id, gone)
+            scope.launch {
+                bounce = id
+                val ok = withContext(Dispatchers.IO) { Engine.call("stump_web_reachable", web) } == "true"
+                if (ok) { bounce = null; tab = id } else { bounce = null; refuse(id, gone) }
+            }
+        }
+        // On the billboard or files when the Wi-Fi goes: say so, and back to the room.
+        LaunchedEffect(tab, offered[tab]) {
+            if ((tab == "board" || tab == "files") && offered[tab] == false) refuse(tab, gone)
         }
         val under = bounce ?: shown                     // where the underline is
         BoxWithConstraints(Modifier.fillMaxWidth().background(Amber.Sidebar)) {
@@ -350,7 +372,7 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
                         val available = offered[id] == true
                         val color = when { !available -> Amber.Border; under == id -> accent; isNew -> accent; else -> Amber.Muted }
                         Box(Modifier.weight(1f).fillMaxHeight()
-                            .clickable { if (available) tab = id else refuse(id) }
+                            .clickable { if (available) open(id) else refuse(id) }
                             .semantics { contentDescription = tabDescriptions.getValue(id) + if (available) "" else ", " + whyNot[id] },
                             contentAlignment = Alignment.Center) {
                             androidx.compose.material3.Icon(

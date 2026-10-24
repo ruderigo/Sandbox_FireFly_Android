@@ -592,6 +592,18 @@ def discover_lan(own_ip, prefix, skip_json="[]"):
     return _j(found)
 
 
+def stump_web_reachable(key):
+    """Before opening a Stump's billboard or files: does it answer on this Wi-Fi right now?
+    A quick GET /node.json (1.5 s). -> true/false"""
+    c = _need()
+    try:
+        r = c.http.request("GET", _wifi_base(key) + "/node.json", "{}", None, 1500)
+        from .stump_web import _attr
+        return _j(int(_attr(r, "status")) > 0)        # any answer: it's there (an older one has no /node.json)
+    except Exception:
+        return _j(False)
+
+
 def stump_refresh_wifi(force=False):
     """Known Stumps answering on this Wi-Fi: opened there, or followed to a new address.
     Cheap (one broadcast, ~1.5 s); the Stumps tab calls it when shown, and the app when the

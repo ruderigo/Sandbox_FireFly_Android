@@ -21,6 +21,11 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - A Stump's screen opened over LoRa takes the billboard and files from
   the same Stump's Wi-Fi side as soon as it answers there: their icons
   light up by themselves, and dim again ("N/A over LoRa") when it stops.
+- The other way too: a Stump opened over Wi-Fi whose Wi-Fi goes (Wi-Fi off,
+  out of range) dims its billboard and files. A tap on them checks that
+  the Stump still answers first (the underline goes there meanwhile) and,
+  if not, says "N/A over LoRa" and goes back to the room; being on the
+  billboard or files when the Wi-Fi goes does the same.
 
 ### 0.5.1-beta.2: a new navigation on a Stump's screen
 - **The room on the left half; icons on the right half** for private

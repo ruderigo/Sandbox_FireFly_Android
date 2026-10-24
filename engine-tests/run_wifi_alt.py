@@ -52,5 +52,9 @@ check("the LoRa side's view now offers its Wi-Fi side, answering",
       (v()["wifi_alt"], v()["wifi_alt_online"]))
 b = json.loads(api.stump_board(v()["wifi_alt"]))
 check("...and its billboard can be read from there", b.get("state") == "ok", b)
+check("the quick check before opening: true while it answers",
+      api.stump_web_reachable(v()["wifi_alt"]) == "true")
+check("...false for an address where nothing answers (the phone left that Wi-Fi)",
+      api.stump_web_reachable("wifi:http://127.0.0.1:47729") == "false")
 print("ALL PASS" if not fails else f"{fails} FAILED")
 os._exit(1 if fails else 0)
