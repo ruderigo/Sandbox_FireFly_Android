@@ -395,8 +395,11 @@ def stump_view(key, room=None):
     if key.startswith("mesh:"):
         # Over LoRa with nothing to carry it: offer this Stump's Wi-Fi entry instead.
         node["reachable"] = c.can_reach(node["address"])
-        node["wifi_alt"] = next((n["key"] for n in c.store.stump_nodes()
-                                 if n["transport"] == "wifi" and n.get("lxmf") == node["address"]), None)
+        alt = next((n for n in c.store.stump_nodes()
+                    if n["transport"] == "wifi" and n.get("lxmf") == node["address"]), None)
+        node["wifi_alt"] = alt["key"] if alt else None
+        # It answers on the Wi-Fi now: its billboard and files can be had there.
+        node["wifi_alt_online"] = bool(alt and alt.get("online"))
     return _j(node)
 
 
@@ -589,12 +592,13 @@ def discover_lan(own_ip, prefix, skip_json="[]"):
     return _j(found)
 
 
-def stump_refresh_wifi():
+def stump_refresh_wifi(force=False):
     """Known Stumps answering on this Wi-Fi: opened there, or followed to a new address.
-    Cheap (one broadcast, ~1.5 s); the Stumps tab calls it when shown."""
+    Cheap (one broadcast, ~1.5 s); the Stumps tab calls it when shown, and the app when the
+    phone's Wi-Fi changes and has settled (force: whatever the last one was)."""
     c = _need()
     now = time.time()
-    if now - getattr(c, "_refreshed_at", 0) < 20:
+    if not force and now - getattr(c, "_refreshed_at", 0) < 20:
         return _j([])
     c._refreshed_at = now
     return _j(c.refresh_wifi())

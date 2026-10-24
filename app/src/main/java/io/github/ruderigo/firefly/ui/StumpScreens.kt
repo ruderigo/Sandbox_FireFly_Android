@@ -183,14 +183,23 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
     }
     val mesh = key.startsWith("mesh:")
     // Billboard and files: Wi-Fi only, read once when the node opens (and on Refresh),
-    // not on every chat change. A feature the node doesn't offer has no tab.
-    var board by remember(key) { mutableStateOf<JSONObject?>(null) }
-    var shelf by remember(key) { mutableStateOf<JSONObject?>(null) }
+    // not on every chat change. Opened over LoRa, they come from the same Stump's Wi-Fi side
+    // whenever it answers (the phone joined its Wi-Fi meanwhile), and go when it doesn't.
+    val webKey = if (!mesh) key else view.optString("wifi_alt")
+        .takeIf { it.isNotBlank() && it != "null" && view.optBoolean("wifi_alt_online") }
+    var board by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
+    var shelf by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
     var plugins by remember(key) { mutableStateOf<JSONObject?>(null) }     // its !commands
     var tools by remember(key) { mutableStateOf<JSONObject?>(null) }       // a newer FireFly on its card
     var chain by remember(key) { mutableStateOf<JSONObject?>(null) }       // its place in a chain of Stumps
     var radio by remember(key) { mutableStateOf<JSONObject?>(null) }       // its radio settings beside ours
     val version = myVersion(LocalContext.current)
+    LaunchedEffect(webKey) {
+        if (webKey != null && mesh) {
+            board = Engine.obj("stump_board", webKey)
+            shelf = Engine.obj("stump_files", webKey)
+        }
+    }
     LaunchedEffect(key) {
         if (!mesh) {
             board = Engine.obj("stump_board", key)
@@ -289,7 +298,8 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             Triple("board", R.drawable.ic_tab_board to R.drawable.ic_tab_board_new, false),
             Triple("files", R.drawable.ic_tab_files to R.drawable.ic_tab_files_new, false))
         val offered = mapOf("dm" to true,
-            "board" to (!mesh && board.webState() != "off"), "files" to (!mesh && shelf.webState() != "off"))
+            "board" to (webKey != null && board.webState() != "off"),      // still loading counts as offered
+            "files" to (webKey != null && shelf.webState() != "off"))
         val shown = if (tab == "room" || offered[tab] == true) tab else "room"   // a tab whose feature turned out off
         val tabDescriptions = mapOf("dm" to stringResource(R.string.private_tab, unread),
             "board" to stringResource(R.string.tab_board), "files" to stringResource(R.string.tab_files))
@@ -298,8 +308,8 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         var bounce by remember(key) { mutableStateOf<String?>(null) }
         var notice by remember(key) { mutableStateOf<String?>(null) }
         val whyNot = mapOf(
-            "board" to stringResource(if (mesh) R.string.tab_not_over_lora else R.string.tab_board_off),
-            "files" to stringResource(if (mesh) R.string.tab_not_over_lora else R.string.tab_files_off))
+            "board" to stringResource(if (webKey == null) R.string.tab_not_over_lora else R.string.tab_board_off),
+            "files" to stringResource(if (webKey == null) R.string.tab_not_over_lora else R.string.tab_files_off))
         fun refuse(id: String) {
             if (bounce != null) return
             scope.launch {
@@ -356,8 +366,8 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             Column(Modifier.fillMaxSize()) {
                 when (shown) {
                     "dm" -> PrivatePane(key, view, threads, mesh, go)
-                    "board" -> BoardPane(key, board) { board = it }
-                    "files" -> FilesPane(key, shelf) { shelf = it }
+                    "board" -> BoardPane(webKey ?: key, board) { board = it }
+                    "files" -> FilesPane(webKey ?: key, shelf) { shelf = it }
                     else -> RoomPane(key, view, mesh, plugins)
                 }
             }

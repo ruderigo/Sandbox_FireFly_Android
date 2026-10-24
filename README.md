@@ -8,11 +8,19 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.2** (sandbox; the stable release is 0.5.0, for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.3** (sandbox; the stable release is 0.5.0, for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1-beta.3: the billboard and files follow the Wi-Fi
+- When the phone joins (or changes) a Wi-Fi, FireFly waits until it has
+  settled (3 s) and looks for your Stumps on it, wherever you are in the
+  app: no search needed.
+- A Stump's screen opened over LoRa takes the billboard and files from
+  the same Stump's Wi-Fi side as soon as it answers there: their icons
+  light up by themselves, and dim again ("N/A over LoRa") when it stops.
 
 ### 0.5.1-beta.2: a new navigation on a Stump's screen
 - **The room on the left half; icons on the right half** for private
