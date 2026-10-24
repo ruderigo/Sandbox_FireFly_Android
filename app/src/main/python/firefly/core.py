@@ -815,6 +815,92 @@ class Core:
     def stump_blocks(self, key, nick):
         return str(nick or "").lstrip("~").lower() in self.store.stump_blocked(self.stump_id(key))
 
+    MESH_ALIVE_S = 10 * 60          # a Stump announces its LXMF address every 2 min
+    BEACON_ALIVE_S = 35 * 60        # and its stump.node beacon every 30 min
+
+    def stump_reach(self, key, on_wifi=None, probe=False):
+        """How this Stump can be reached now, all its sides together:
+        {"state": "wifi" | "lora" | "no_wifi" | "offline", "web": the Wi-Fi key answering or None,
+         "lora": bool, "name"}. on_wifi: is the phone on a Wi-Fi (the app knows; None: don't
+        know). probe: ask the Wi-Fi side now (GET /node.json, 1.5 s) instead of trusting its
+        last poll; one that doesn't answer is marked offline."""
+        keys = self.same_stump(self.resolve(key))
+        nodes = [n for n in (self.store.stump_node(k) for k in keys) if n]
+        wifi = [n for n in nodes if n["transport"] == "wifi"]
+        mesh = next((n for n in nodes if n["transport"] == "mesh"), None)
+        web = None
+        if on_wifi is not False:
+            for n in sorted(wifi, key=lambda n: -(n.get("online") or 0)):
+                if probe:
+                    if self._web_answers(n["key"]):
+                        web = n["key"]
+                        break
+                    sess = self.sessions.get(n["key"])
+                    if sess is not None:
+                        sess.set_online(False, "no answer")
+                elif n.get("online"):
+                    web = n["key"]
+                    break
+        lora = False
+        if mesh:
+            now = time.time()
+            announced = (self.store.peer(mesh["address"]) or {}).get("last_heard") or 0
+            beaconed = mesh.get("last_seen") or 0
+            recent = now - announced < self.MESH_ALIVE_S or now - beaconed < self.BEACON_ALIVE_S
+            lora = bool(recent and self.can_reach(mesh["address"]))
+        if web:
+            state = "wifi"
+        elif lora:
+            state = "lora"
+        elif on_wifi is False and not mesh:
+            state = "no_wifi"               # a Wi-Fi Stump, and the phone isn't on a Wi-Fi
+        else:
+            state = "offline"
+        name = next((n["name"] for n in nodes if n.get("name") and not str(n["name"]).startswith("Stump Wi-Fi (")),
+                    None) or (nodes[0].get("name") if nodes else None)
+        return {"state": state, "web": web, "lora": lora, "name": name}
+
+    def _web_answers(self, key):
+        try:
+            r = self.http.request("GET", key.partition(":")[2] + "/node.json", "{}", None, 1500)
+            from .stump_web import _attr
+            return int(_attr(r, "status")) > 0         # any answer: it's there
+        except Exception:
+            return False
+
+    def refresh_stumps(self, on_wifi=None):
+        """Pull to refresh: ask every Stump we know whether it's there. The Wi-Fi ones are
+        probed (and looked for on this Wi-Fi, STUMP?); the LoRa ones are asked for a path,
+        which they answer with an announce (heard: alive). -> how many answered on Wi-Fi."""
+        answered = 0
+        if on_wifi is not False:
+            try:
+                self.refresh_wifi()
+            except Exception as e:
+                self.log(f"refresh: STUMP? failed: {e}")
+            for n in self.store.stump_nodes():
+                if n["transport"] != "wifi":
+                    continue
+                ok = self._web_answers(n["key"])
+                answered += ok
+                sess = self.sessions.get(n["key"])
+                if sess is not None:
+                    sess.set_online(ok, None if ok else "no answer")
+                else:
+                    self.store.upsert_stump_node(n["key"], "wifi", n["address"], online=1 if ok else 0)
+        for n in self.store.stump_nodes():
+            if n["transport"] == "mesh":
+                try:
+                    h = bytes.fromhex(n["address"])
+                    RNS.Transport.request_path(h)       # its LXMF announce comes back: heard
+                    ident = RNS.Identity.recall(h)
+                    if ident:
+                        RNS.Transport.request_path(stump.beacon_hash_for(ident))
+                except Exception:
+                    pass
+        self.emit({"type": "changed"})
+        return answered
+
     def same_stump(self, key):
         """Every entry of the Stump behind `key`: its LoRa entry and its Wi-Fi entries share
         its LXMF address. -> [key, ...], `key` first."""

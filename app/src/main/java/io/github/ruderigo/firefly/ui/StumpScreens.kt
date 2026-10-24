@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package io.github.ruderigo.firefly.ui
 
@@ -55,7 +55,22 @@ import org.json.JSONObject
 /** Stump nodes heard on the mesh (from their stump.node beacon) and the ones joined over Wi-Fi. */
 @Composable
 fun StumpsScreen(go: (Route) -> Unit) {
-    val nodes = engineData(emptyList<JSONObject>()) { Engine.arr("stump_nodes").objects() }
+    val onWifi = WifiHttp.local.collectAsState().value != null
+    val nodes = engineData(emptyList<JSONObject>(), onWifi) { Engine.arr("stump_nodes", onWifi).objects() }
+    // Pull down: ask every Stump whether it's there (Wi-Fi probed, LoRa asked for a path). One
+    // at a time; pulling again meanwhile does nothing.
+    var refreshing by remember { mutableStateOf(false) }
+    val listScope = rememberCoroutineScope()
+    fun refreshAll() {
+        if (refreshing) return
+        refreshing = true
+        listScope.launch {
+            val started = System.currentTimeMillis()
+            runCatching { withContext(Dispatchers.IO) { Engine.call("stump_refresh_all", onWifi) } }
+            delay((800 - (System.currentTimeMillis() - started)).coerceAtLeast(0))   // long enough to see
+            refreshing = false
+        }
+    }
     // Stumps we know that answer on this Wi-Fi (STUMP?): open them here, or follow them to the
     // address the router gave them since. One broadcast, at most every 20 s.
     val gateway by WifiHttp.gateway.collectAsState()
@@ -70,6 +85,8 @@ fun StumpsScreen(go: (Route) -> Unit) {
         onRemove = { removing = n; acting = null }) }
     removing?.let { n -> ConfirmRemoveStump(n.optString("name").ifBlank { n.optString("address") }, onDismiss = { removing = null }) {
         keysOf(n).forEach { Engine.fire("stump_remove", it) }; removing = null } }
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshAll() },
+        modifier = Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -84,8 +101,11 @@ fun StumpsScreen(go: (Route) -> Unit) {
             val both = (n.optJSONArray("transports")?.length() ?: 1) > 1
             Row(Modifier.fillMaxWidth().rowPress(onClick = { go(Route.Node(n.optString("key"))) }, onLongClick = { acting = n }),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text("⌂", style = MaterialTheme.typography.titleLarge.copy(color = if (n.optInt("online") == 1) Amber.Ember else Amber.Dim),
-                    modifier = Modifier.padding(end = 12.dp))
+                // A stump: filled when it answers (on the Wi-Fi, or heard over LoRa lately), outlined when not.
+                val alive = n.optBoolean("alive")
+                androidx.compose.material3.Icon(painterResource(if (alive) R.drawable.ic_stump_online else R.drawable.ic_stump),
+                    contentDescription = stringResource(if (alive) R.string.stump_online else R.string.stump_not_answering),
+                    tint = if (alive) Amber.Ember else Amber.Dim, modifier = Modifier.padding(end = 12.dp).size(26.dp))
                 Column(Modifier.weight(1f)) {
                     Text(n.optString("name").ifBlank { n.optString("address") }, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -107,6 +127,7 @@ fun StumpsScreen(go: (Route) -> Unit) {
                 .clip(Small).clickable { Engine.fire("stump_restore_hidden") }.padding(6.dp),
                 style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
         }
+    }
     }
 }
 
@@ -177,22 +198,19 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
     var key by remember(openedAs) { mutableStateOf(openedAs) }
     var tab by remember(openedAs) { mutableStateOf("room") }
     val scope = rememberCoroutineScope()
-    val view = engineData(JSONObject(), key) { Engine.obj("stump_view", key) }
+    val onWifi = WifiHttp.local.collectAsState().value != null       // the phone is on a Wi-Fi
+    val view = engineData(JSONObject(), key, onWifi) { Engine.obj("stump_view", key, null, onWifi) }
     LaunchedEffect(view) {
         view.optString("moved_to").takeIf { it.isNotBlank() && it != "null" && it != key }?.let { key = it }
     }
     val mesh = key.startsWith("mesh:")
-    // Billboard and files: Wi-Fi only, read once when the node opens (and on Refresh),
-    // not on every chat change. Opened over LoRa, they come from the same Stump's Wi-Fi side
-    // whenever it answers (the phone joined its Wi-Fi meanwhile), and go when it doesn't.
-    // Only while the phone is on a Wi-Fi and that side answers: opened over Wi-Fi and moved
-    // onto LoRa (Wi-Fi off, out of range), the billboard and files go too.
-    val onWifi = WifiHttp.local.collectAsState().value != null
-    val webKey = when {
-        !onWifi -> null
-        !mesh -> key.takeIf { view.optInt("online", 1) == 1 }
-        else -> view.optString("wifi_alt").takeIf { it.isNotBlank() && it != "null" && view.optBoolean("wifi_alt_online") }
-    }
+    // Billboard and files come from wherever this Stump answers on the Wi-Fi now, whichever
+    // side the screen was opened on; the engine says (reach: "wifi" with its address, "lora",
+    // "no_wifi", "offline"). Settled: a single missed poll doesn't make the icons blink.
+    val reachNow = view.optJSONObject("reach")
+    val reachState = settled(reachNow?.optString("state") ?: if (mesh) "lora" else "wifi") { if (it == "wifi") 300L else 1500L }
+    val webKey = reachNow?.optString("web")?.takeIf { reachState == "wifi" && it.isNotBlank() && it != "null" }
+        ?: key.takeIf { !mesh && reachState == "wifi" }
     var board by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
     var shelf by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
     var plugins by remember(key) { mutableStateOf<JSONObject?>(null) }     // its !commands
@@ -309,40 +327,54 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         val shown = if (tab == "room" || offered[tab] == true) tab else "room"   // a tab whose feature turned out off
         val tabDescriptions = mapOf("dm" to stringResource(R.string.private_tab, unread),
             "board" to stringResource(R.string.tab_board), "files" to stringResource(R.string.tab_files))
-        // A tap on a dimmed tab: the underline goes there (300 ms), a note says why it can't open
-        // (600 ms), and it comes back to the room, which opens.
+        // A tap on a billboard or files icon: the underline goes there while the engine checks
+        // the Stump still answers on the Wi-Fi (a probe), then it opens; or a note says why not
+        // (600 ms) and the underline goes back to the room. One at a time: taps while it's busy
+        // (checking, or the note) are ignored.
         var bounce by remember(key) { mutableStateOf<String?>(null) }
         var notice by remember(key) { mutableStateOf<String?>(null) }
-        val whyNot = mapOf(
-            "board" to stringResource(if (webKey == null) R.string.tab_not_over_lora else R.string.tab_board_off),
-            "files" to stringResource(if (webKey == null) R.string.tab_not_over_lora else R.string.tab_files_off))
-        fun refuse(id: String, why: String? = null) {
-            if (bounce != null && bounce != id) return
+        var busy by remember(key) { mutableStateOf(false) }
+        val stumpName = view.optString("name").ifBlank { key.substringAfter(":") }
+        val texts = mapOf("lora" to stringResource(R.string.tab_not_over_lora), "no_wifi" to stringResource(R.string.tab_no_wifi),
+            "offline" to stringResource(R.string.stump_offline, stumpName),
+            "board_off" to stringResource(R.string.tab_board_off), "files_off" to stringResource(R.string.tab_files_off))
+        fun reason(id: String, state: String) =
+            if (state == "wifi") texts.getValue("${id}_off") else texts[state] ?: texts.getValue("offline")
+        fun bounceBack(id: String, why: String, startedAt: Long = System.currentTimeMillis()) {
             scope.launch {
+                busy = true
                 bounce = id
-                delay(300)
-                notice = why ?: whyNot[id]
+                delay((300 - (System.currentTimeMillis() - startedAt)).coerceAtLeast(0))
+                notice = why
                 delay(600)
                 notice = null
                 bounce = null
                 tab = "room"
+                busy = false
             }
         }
-        val gone = stringResource(R.string.tab_not_over_lora)
-        // An offered billboard or files: check the Stump still answers on the Wi-Fi (the phone
-        // may have just left it); the underline goes there while it asks.
         fun open(id: String) {
-            if (id == "dm" || bounce != null) { tab = id; return }
-            val web = webKey ?: return refuse(id, gone)
+            if (busy) return
+            if (id == "room" || id == "dm") { tab = id; return }
+            if (offered[id] != true) return bounceBack(id, reason(id, reachState))
+            val started = System.currentTimeMillis()
+            busy = true
+            bounce = id
             scope.launch {
-                bounce = id
-                val ok = withContext(Dispatchers.IO) { Engine.call("stump_web_reachable", web) } == "true"
-                if (ok) { bounce = null; tab = id } else { bounce = null; refuse(id, gone) }
+                val r = runCatching { JSONObject(withContext(Dispatchers.IO) { Engine.call("stump_reach", key, onWifi, true) }) }
+                    .getOrNull()
+                val state = r?.optString("state") ?: "offline"
+                if (state == "wifi") {
+                    bounce = null; tab = id; busy = false
+                } else {
+                    busy = false
+                    bounceBack(id, reason(id, state), started)
+                }
             }
         }
-        // On the billboard or files when the Wi-Fi goes: say so, and back to the room.
+        // On the billboard or files when it stops being reachable: say why, and back to the room.
         LaunchedEffect(tab, offered[tab]) {
-            if ((tab == "board" || tab == "files") && offered[tab] == false) refuse(tab, gone)
+            if ((tab == "board" || tab == "files") && offered[tab] == false && !busy) bounceBack(tab, reason(tab, reachState))
         }
         val under = bounce ?: shown                     // where the underline is
         BoxWithConstraints(Modifier.fillMaxWidth().background(Amber.Sidebar)) {
@@ -353,7 +385,7 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             val lineWidth by animateDpAsState(if (index < 0) half else slot, tween(220), label = "tab width")
             val lineColor by animateColorAsState(if (under == "dm") Amber.DmNick else Amber.Ember, tween(220), label = "tab colour")
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(bottom = 2.dp)) {
-                Box(Modifier.weight(1f).fillMaxHeight().clickable { tab = "room" }, contentAlignment = Alignment.CenterStart) {
+                Box(Modifier.weight(1f).fillMaxHeight().clickable { open("room") }, contentAlignment = Alignment.CenterStart) {
                     // "#room (topic)", from the left; too long for the half, it scrolls by itself so it
                     // can be read through, left to right.
                     val topic = view.optString("topic").takeIf { it.isNotBlank() && it != "null" }
@@ -372,8 +404,8 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
                         val available = offered[id] == true
                         val color = when { !available -> Amber.Border; under == id -> accent; isNew -> accent; else -> Amber.Muted }
                         Box(Modifier.weight(1f).fillMaxHeight()
-                            .clickable { if (available) open(id) else refuse(id) }
-                            .semantics { contentDescription = tabDescriptions.getValue(id) + if (available) "" else ", " + whyNot[id] },
+                            .clickable { open(id) }
+                            .semantics { contentDescription = tabDescriptions.getValue(id) + if (available) "" else ", " + reason(id, reachState) },
                             contentAlignment = Alignment.Center) {
                             androidx.compose.material3.Icon(
                                 painterResource(if (isNew) icons.second else icons.first), contentDescription = null,

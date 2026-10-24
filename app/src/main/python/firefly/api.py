@@ -273,7 +273,7 @@ def remove_ble_device(address):
 
 
 # ------------------------------------------------------------------ Stump
-def stump_nodes():
+def stump_nodes(on_wifi=None):
     """One entry per Stump: a node reached over both LoRa and Wi-Fi (the same LXMF address,
     which a Wi-Fi node gives in its poll) is one row. The row is the transport to open first
     (Wi-Fi while it answers, else LoRa); the other ones are in "others"."""
@@ -307,6 +307,7 @@ def stump_nodes():
         first["name"] = next((m["name"] for m in members if m.get("name") and not str(m["name"]).startswith("Stump Wi-Fi (")),
                              first.get("name"))
         first["group"] = g                  # stays the same whichever transport opens first
+        first["alive"] = c.stump_reach(first["key"], _flag(on_wifi))["state"] in ("wifi", "lora")
         out.append(first)
     # A steady order: by name, not by who was heard last (Stumps close to each other beacon and
     # answer all the time, and a list sorted by "last heard" kept jumping).
@@ -371,7 +372,7 @@ def stump_close(key, forget=False):
     _need().close_stump(key, forget=bool(forget))
 
 
-def stump_view(key, room=None):
+def stump_view(key, room=None, on_wifi=None):
     c = _need()
     asked = key
     key = c.resolve(key)
@@ -383,6 +384,7 @@ def stump_view(key, room=None):
     node["lines"] = c.store.lines(key, room)
     node["viewing"] = room
     node["threads"] = c.store.dm_threads(c.same_stump(key))     # over LoRa and Wi-Fi alike
+    node["reach"] = c.stump_reach(key, _flag(on_wifi))          # billboard, files: where from, or why not
     node["blocked"] = c.store.stump_blocked(c.stump_id(key))
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
     node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
@@ -593,15 +595,26 @@ def discover_lan(own_ip, prefix, skip_json="[]"):
 
 
 def stump_web_reachable(key):
-    """Before opening a Stump's billboard or files: does it answer on this Wi-Fi right now?
-    A quick GET /node.json (1.5 s). -> true/false"""
-    c = _need()
-    try:
-        r = c.http.request("GET", _wifi_base(key) + "/node.json", "{}", None, 1500)
-        from .stump_web import _attr
-        return _j(int(_attr(r, "status")) > 0)        # any answer: it's there (an older one has no /node.json)
-    except Exception:
-        return _j(False)
+    """Does this Wi-Fi Stump answer right now? (GET /node.json, 1.5 s, any answer.) -> true/false"""
+    return _j(_need()._web_answers(str(key)))
+
+
+def stump_reach(key, on_wifi=None, probe=False):
+    """How a Stump can be reached now (Core.stump_reach): before opening its billboard or
+    files (probe: ask its Wi-Fi side now), and to say why not."""
+    return _j(_need().stump_reach(str(key), _flag(on_wifi), bool(probe)))
+
+
+def stump_refresh_all(on_wifi=None):
+    """Pull to refresh on the Stumps tab: is each Stump there? A few seconds."""
+    return _j(_need().refresh_stumps(_flag(on_wifi)))
+
+
+def _flag(v):
+    """A yes/no from the app (Kotlin Boolean, or a string), None when not given."""
+    if v is None or isinstance(v, bool):
+        return v
+    return str(v).lower() == "true"
 
 
 def stump_refresh_wifi(force=False):

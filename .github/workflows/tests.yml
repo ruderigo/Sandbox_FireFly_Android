@@ -65,7 +65,7 @@ jobs:
 
       - name: A Stump that moved, a phone with no radio, home Wi-Fi
         timeout-minutes: 4
-        run: bash engine-tests/ci_run.sh run_relocate.py run_reach.py run_gateway.py run_wifi_alt.py
+        run: bash engine-tests/ci_run.sh run_relocate.py run_reach.py run_gateway.py run_wifi_alt.py run_reach_states.py
 
       - name: Stump node without Opus
         timeout-minutes: 2

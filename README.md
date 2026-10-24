@@ -8,11 +8,30 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.3** (sandbox; the stable release is 0.5.0, for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.4** (sandbox; the stable release is 0.5.0, for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1-beta.4: one answer for "can I reach this Stump?"
+- **The engine decides, the screen follows.** Whether a Stump's billboard
+  and files can be had, and why not, is worked out in one place for all of
+  its sides (Wi-Fi and LoRa) and the phone's Wi-Fi: reachable on the Wi-Fi;
+  **N/A over LoRa** (only LoRa reaches it: heard in the last 10 min, and the
+  radio or a path can carry); **N/A without Wi-Fi** (a Wi-Fi-only Stump, the
+  phone off Wi-Fi); **"<name> is offline"** (nothing reaches it). A Stump
+  that's simply down no longer says "N/A over LoRa".
+- **A tap checks first:** the underline goes to the icon while the Stump is
+  asked (1.5 s); then it opens, or the right note shows and it goes back to
+  the room. Taps while it's checking or showing a note are ignored.
+- **No blinking:** a change only counts once it has held (lighting up after
+  0.3 s, dimming after 1.5 s), so one missed poll doesn't flip the icons.
+- **The Stumps tab:** each Stump has a stump icon, filled when it answers
+  (on the Wi-Fi, or heard over LoRa lately) and outlined when not. **Pull
+  down to refresh:** every Stump is asked (Wi-Fi probed, LoRa asked for a
+  path, which it answers with an announce); pulling again meanwhile does
+  nothing.
 
 ### 0.5.1-beta.3: the billboard and files follow the Wi-Fi
 - When the phone joins (or changes) a Wi-Fi, FireFly waits until it has

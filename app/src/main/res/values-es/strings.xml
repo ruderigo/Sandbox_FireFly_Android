@@ -356,4 +356,8 @@
     <string name="tab_not_over_lora">N/D por LoRa</string>
     <string name="tab_board_off">Este Stump no tiene tablón</string>
     <string name="tab_files_off">Este Stump no comparte archivos</string>
+    <string name="tab_no_wifi">N/D sin Wi-Fi</string>
+    <string name="stump_offline">%1$s está fuera de línea</string>
+    <string name="stump_online">Responde</string>
+    <string name="stump_not_answering">No responde</string>
 </resources>
