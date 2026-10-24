@@ -1,5 +1,6 @@
 package io.github.ruderigo.firefly.ui
 
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
@@ -267,27 +268,40 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         }
         if (auth == "failed") Text(stringResource(R.string.verify_failed, view.optString("auth_detail")),
             style = MaterialTheme.typography.bodySmall.copy(color = Amber.Error), modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-        val tabs = buildList {
-            add("room" to "#" + view.optString("room", "…"))
-            add("dm" to "✉ ($unread)")             // private messages: an envelope, not a word
-            if (!mesh && board.webState() != "off") add("board" to stringResource(R.string.tab_board))
-            if (!mesh && shelf.webState() != "off") add("files" to stringResource(R.string.tab_files))
+        // The navigation: the room on the left half; private messages, billboard and files as
+        // icons sharing the right half (only those this Stump offers here). An icon is outlined
+        // when there's nothing new and filled when there is (unread DMs; later, new notices or
+        // files).
+        val iconTabs = buildList {
+            add(Triple("dm", R.drawable.ic_tab_envelope to R.drawable.ic_tab_envelope_new, unread > 0))
+            if (!mesh && board.webState() != "off") add(Triple("board", R.drawable.ic_tab_board to R.drawable.ic_tab_board_new, false))
+            if (!mesh && shelf.webState() != "off") add(Triple("files", R.drawable.ic_tab_files to R.drawable.ic_tab_files_new, false))
         }
-        val shown = if (tabs.any { it.first == tab }) tab else "room"     // a tab whose feature turned out off
-        val dmDescription = stringResource(R.string.private_tab, unread)     // what a screen reader says for ✉
-        Row(Modifier.fillMaxWidth().background(Amber.Sidebar)) {
-            tabs.forEach { (id, label) ->
-                val accent = if (id == "dm") Amber.DmNick else Amber.Ember
-                // The room's name is the long one; the envelope needs little room.
-                val weight = when (id) { "room" -> 1.5f; "dm" -> 0.8f; else -> 1f }
-                Column(Modifier.weight(weight).clickable { tab = id }
-                    .semantics { if (id == "dm") contentDescription = dmDescription },
-                    horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(label, modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp), maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            color = if (shown == id) accent else if (id == "dm" && unread > 0) Amber.DmNick else Amber.Muted))
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(if (shown == id) accent else Amber.Sidebar))
+        val shown = if (tab == "room" || iconTabs.any { it.first == tab }) tab else "room"   // a tab whose feature turned out off
+        val tabDescriptions = mapOf("dm" to stringResource(R.string.private_tab, unread),
+            "board" to stringResource(R.string.tab_board), "files" to stringResource(R.string.tab_files))
+        Row(Modifier.fillMaxWidth().background(Amber.Sidebar).height(IntrinsicSize.Min)) {
+            Column(Modifier.weight(1f).fillMaxHeight().clickable { tab = "room" }, horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("#" + view.optString("room", "…"), modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelLarge.copy(color = if (shown == "room") Amber.Ember else Amber.Muted))
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.fillMaxWidth().height(2.dp).background(if (shown == "room") Amber.Ember else Amber.Sidebar))
+            }
+            Row(Modifier.weight(1f)) {
+                iconTabs.forEach { (id, icons, isNew) ->
+                    val accent = if (id == "dm") Amber.DmNick else Amber.Ember
+                    val color = when { shown == id -> accent; isNew -> accent; else -> Amber.Muted }
+                    Column(Modifier.weight(1f).fillMaxHeight().clickable { tab = id }
+                        .semantics { contentDescription = tabDescriptions.getValue(id) },
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        Spacer(Modifier.weight(1f))
+                        androidx.compose.material3.Icon(
+                            painterResource(if (isNew) icons.second else icons.first), contentDescription = null,
+                            tint = color, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.weight(1f))
+                        Box(Modifier.fillMaxWidth().height(2.dp).background(if (shown == id) accent else Amber.Sidebar))
+                    }
                 }
             }
         }
