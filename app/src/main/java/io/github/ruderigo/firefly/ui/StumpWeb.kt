@@ -68,6 +68,7 @@ fun ColumnScope.BoardPane(key: String, board: JSONObject?, onBoard: (JSONObject)
     var query by remember(key) { mutableStateOf("") }
 
     fun refresh() {
+        if (loading) return                 // one at a time
         loading = true
         scope.launch { onBoard(Engine.obj("stump_board", key, query.trim())); loading = false }
     }
@@ -163,6 +164,7 @@ fun ColumnScope.FilesPane(key: String, shelf: JSONObject?, onShelf: (JSONObject)
     var cat by remember(key) { mutableStateOf("") }
 
     fun refresh() {
+        if (loading) return                 // one at a time
         loading = true
         scope.launch { onShelf(Engine.obj("stump_files", key, query.trim(), cat)); loading = false }
     }

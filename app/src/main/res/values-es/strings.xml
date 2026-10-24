@@ -365,4 +365,5 @@
     <string name="board_lora_no_answer">Aún no hay respuesta por LoRa. Inténtalo de nuevo en un momento.</string>
     <string name="board_lora_gone">Este anuncio ya no está (¿caducado?).</string>
     <string name="board_post_lora">Publicar por LoRa</string>
+    <string name="rooms_refreshing">actualizando…</string>
 </resources>

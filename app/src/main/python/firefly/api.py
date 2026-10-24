@@ -386,6 +386,7 @@ def stump_view(key, room=None, on_wifi=None):
     node["threads"] = c.store.dm_threads(c.same_stump(key))     # over LoRa and Wi-Fi alike
     node["reach"] = c.stump_reach(key, _flag(on_wifi))          # billboard, files: where from, or why not
     node["lora_key"] = next((k for k in c.same_stump(key) if k.startswith("mesh:")), None)
+    node.update(sess.busy_state())                  # a /join or /rooms on its way: the buttons wait
     node["bots"] = sorted(getattr(sess, "bots", ()) | set().union(*[getattr(c.sessions.get(k), "bots", set())
                                                                     for k in c.same_stump(key)]))
     node["blocked"] = c.store.stump_blocked(c.stump_id(key))

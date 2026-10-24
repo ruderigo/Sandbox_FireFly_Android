@@ -451,21 +451,49 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
     val draft = remember(key) { mutableStateOf("") }
     val rooms = view.optJSONArray("rooms")?.objects() ?: emptyList()
     val here = view.optString("room")
+    // A room switch or a refresh on its way (the engine says, until the Stump answers; a tap
+    // counts at once, for 2 s, until the engine's word comes): the buttons wait, the room
+    // being joined blinks with "…", and "refresh" reads "refreshing…".
+    var pressedJoin by remember(key) { mutableStateOf<String?>(null) }
+    var pressedAt by remember(key) { mutableStateOf(0L) }
+    var pressedRoomsAt by remember(key) { mutableStateOf(0L) }
+    var recheck by remember { mutableStateOf(0) }
+    LaunchedEffect(pressedAt, pressedRoomsAt) { delay(2100); recheck++ }
+    val now = if (recheck >= 0) System.currentTimeMillis() else 0L
+    val joining = view.optString("joining").takeIf { it.isNotBlank() && it != "null" }
+        ?: pressedJoin?.takeIf { now - pressedAt < 2000 && !stumpSameRoom(it, here) }
+    val refreshing = view.optBoolean("refreshing") || now - pressedRoomsAt < 2000
+    var blink by remember { mutableStateOf(true) }
+    LaunchedEffect(joining) { blink = true; while (joining != null) { delay(450); blink = !blink } }
     Row(Modifier.fillMaxWidth().background(Amber.Sidebar).horizontalScroll(rememberScrollState()).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         val names = (rooms.map { it.optString("name") } + here).filter { it.isNotBlank() }.distinct()
         names.forEach { r ->
             val info = rooms.firstOrNull { it.optString("name") == r }
             val tier = info?.optString("tier")?.takeIf { it == "minted" || it == "hybrid" }
-            Text("#$r" + (tier?.let { " ·$it" } ?: "") + (info?.optInt("count", -1)?.takeIf { it >= 0 }?.let { " $it" } ?: ""),
+            val target = joining != null && stumpSameRoom(r, joining)
+            Text("#$r" + (tier?.let { " ·$it" } ?: "") + (info?.optInt("count", -1)?.takeIf { it >= 0 }?.let { " $it" } ?: "") +
+                    (if (target) " …" else ""),
                 modifier = Modifier.padding(end = 6.dp).clip(Small)
-                    .border(1.dp, if (r == here) Amber.Ember else Amber.Border, Small)
-                    .clickable(enabled = r != here) { Engine.fire("stump_join", key, r) }
+                    .border(1.dp, if (r == here || target) Amber.Ember else Amber.Border, Small)
+                    .clickable(enabled = r != here && joining == null) {
+                        pressedJoin = r; pressedAt = System.currentTimeMillis()
+                        Engine.fire("stump_join", key, r)
+                    }
                     .padding(horizontal = 8.dp, vertical = 5.dp),
-                style = MaterialTheme.typography.labelMedium.copy(color = if (r == here) Amber.Ember else Amber.Muted))
+                style = MaterialTheme.typography.labelMedium.copy(color = when {
+                    target -> if (blink) Amber.Ember else Amber.Dim
+                    r == here -> Amber.Ember
+                    joining != null -> Amber.Border
+                    else -> Amber.Muted
+                }))
         }
-        Text(stringResource(R.string.list_rooms), modifier = Modifier.clip(Small).clickable { Engine.fire("stump_command", key, "/rooms") }
-            .padding(horizontal = 8.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
+        Text(stringResource(if (refreshing) R.string.rooms_refreshing else R.string.list_rooms),
+            modifier = Modifier.clip(Small).clickable(enabled = !refreshing) {
+                pressedRoomsAt = System.currentTimeMillis()
+                Engine.fire("stump_command", key, "/rooms")
+            }.padding(horizontal = 8.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelMedium.copy(color = if (refreshing) Amber.Dim else Amber.Ember))
     }
     // (The topic is in the room's tab, after its name.)
     val lines = view.optJSONArray("lines")?.objects() ?: emptyList()
@@ -754,3 +782,11 @@ private fun ConfirmStumpDmDelete(nick: String, onDismiss: () -> Unit, onConfirm:
 private fun ConfirmStumpBlock(nick: String, onDismiss: () -> Unit, onConfirm: () -> Unit) =
     ConfirmDialog(stringResource(R.string.block_title, nick), stringResource(R.string.stump_block_text, nick),
         stringResource(R.string.block), onConfirm = onConfirm, onDismiss = onDismiss)
+
+
+/** The same room by the Stump's names for it (#lxmf is #lora-mesh), case aside. */
+private fun stumpSameRoom(a: String, b: String): Boolean {
+    val alias = mapOf("lxmf" to "lora-mesh", "lora" to "lora-mesh", "chained" to "wifi-mesh", "mesh" to "wifi-mesh")
+    fun canon(r: String) = r.trim().removePrefix("#").lowercase().let { alias[it] ?: it }
+    return canon(a) == canon(b)
+}

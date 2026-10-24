@@ -440,6 +440,7 @@ class StumpSession:
         self.last_move_at = 0.0             # when the node last told us "→ #room"
         self.move_join_pending = False      # that move's own "✓ me" hasn't arrived yet
         self.join_target, self.join_at = None, 0.0
+        self.rooms_asked_at = 0.0           # /rooms sent, its answer not in yet (for "refreshing…")
         self.seen_remote = set()            # HTTP message ids already stored (dedupe)
         if carry:                           # the same Stump at a new address: what we already have
             self.seen_remote |= set(carry.get("seen") or ())
@@ -548,6 +549,17 @@ class StumpSession:
             self._note_join(f"/join {room}")
             self.pipe.send(f"/join {room}")
 
+    def busy_state(self):
+        """For the room's buttons: {"joining": the room a /join is on its way to, or None,
+        "refreshing": a /rooms not answered yet}. Over LoRa answers take longer."""
+        now = time.time()
+        wait = 90 if self.pipe.kind == MESH else 10
+        joining = None
+        if self.join_target and now - self.join_at < min(JOIN_WINDOW_S, wait) and \
+                not stump.same_room(self.join_target, self.room or ""):
+            joining = self.join_target
+        return {"joining": joining, "refreshing": bool(self.rooms_asked_at and now - self.rooms_asked_at < wait)}
+
     def _note_join(self, line):
         parts = line.split()
         if parts and parts[0].lower() in ("/join", "/j") and len(parts) > 1:
@@ -576,6 +588,8 @@ class StumpSession:
 
     def command(self, line):
         self._note_join(line)
+        if line.strip().lower() == "/rooms":
+            self.rooms_asked_at = time.time()
         self.last_command_at = time.time()
         self.pipe.send(line, control=line.startswith("/auth"))
 
@@ -1064,6 +1078,7 @@ class StumpSession:
             self._set_room(p["room"])
             return self.store.add_line(self.key, self.room, "system", f"→ #{self.room}")
         if k == "room":
+            self.rooms_asked_at = 0.0           # its answer is in
             node = self.store.stump_node(self.key) or {}
             rooms = {r["name"]: r for r in node.get("rooms", [])}
             rooms[p["room"]] = {"name": p["room"], "count": p["count"], "tier": p["tier"], "topic": p["topic"]}

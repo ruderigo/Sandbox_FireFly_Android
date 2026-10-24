@@ -103,6 +103,20 @@ check("the list first, though it starts with an awaited notice: the list",
 sess.on_mesh_content("#900001 Pain frais\nDès 7 h.")
 check("...then the notice's own answer: the notice", view()["items"].get("900001", {}).get("body") == "Dès 7 h.")
 
+# The room's buttons wait while a /join or /rooms is on its way (Oct 24).
+st = lambda: json.loads(api.stump_view(K))
+api.stump_command(K, "/rooms")
+check("/rooms sent: refreshing", st()["refreshing"] is True)
+sess.on_mesh_content("#main ·3 General\n#lora-mesh ·1 LoRa")
+check("...its answer in: not any more", st()["refreshing"] is False)
+api.stump_join(K, "main")
+check("/join sent: joining #main", st()["joining"] == "main", st().get("joining"))
+sess.on_mesh_content("→ #main")
+check("...moved there: not joining any more", st()["joining"] is None and st()["room"] == "main", (st().get("joining"), st()["room"]))
+api.stump_join(K, "vip")
+sess.on_mesh_content("⊘ #vip minted — verified only")
+check("...refused: not joining either", st()["joining"] is None)
+
 # Radio down: the line is kept, not 'not sent'.
 sess.post("for the radio room")
 sess.on_mesh_content("⧗ — the radio has been down for 4 min: your message will go out when it's back (kept up to an hour)")

@@ -23,6 +23,12 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
   30 minutes late. "No answer yet" still shows after 2 minutes.
 - The post form shows its size on air (one packet, or several through a
   link): a long notice takes a while over LoRa.
+- **Room buttons and refresh wait, and show it.** Tapping a room: it reads
+  `#room …` and blinks until the Stump has moved you there (or refused),
+  and the other rooms wait meanwhile. "refresh" reads "refreshing…" until
+  the Stump's room list is in. Over LoRa they wait longer (up to 90 s).
+  The billboard's and files' search doesn't start a second fetch while one
+  runs.
 
 ### 0.5.1-beta.5: the billboard over LoRa (Stump 1.0.0-beta.38)
 - **A LoRa Board tab.** Over LoRa only, the billboard icon now opens: the
