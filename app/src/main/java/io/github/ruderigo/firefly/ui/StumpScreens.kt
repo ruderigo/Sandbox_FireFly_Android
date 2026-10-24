@@ -1,5 +1,7 @@
 package io.github.ruderigo.firefly.ui
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -267,17 +269,24 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             style = MaterialTheme.typography.bodySmall.copy(color = Amber.Error), modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
         val tabs = buildList {
             add("room" to "#" + view.optString("room", "…"))
-            add("dm" to stringResource(R.string.private_tab, unread))
+            add("dm" to "✉ ($unread)")             // private messages: an envelope, not a word
             if (!mesh && board.webState() != "off") add("board" to stringResource(R.string.tab_board))
             if (!mesh && shelf.webState() != "off") add("files" to stringResource(R.string.tab_files))
         }
         val shown = if (tabs.any { it.first == tab }) tab else "room"     // a tab whose feature turned out off
+        val dmDescription = stringResource(R.string.private_tab, unread)     // what a screen reader says for ✉
         Row(Modifier.fillMaxWidth().background(Amber.Sidebar)) {
             tabs.forEach { (id, label) ->
                 val accent = if (id == "dm") Amber.DmNick else Amber.Ember
-                Column(Modifier.weight(1f).clickable { tab = id }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(label, modifier = Modifier.padding(vertical = 10.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelLarge.copy(color = if (shown == id) accent else Amber.Muted))
+                // The room's name is the long one; the envelope needs little room.
+                val weight = when (id) { "room" -> 1.5f; "dm" -> 0.8f; else -> 1f }
+                Column(Modifier.weight(weight).clickable { tab = id }
+                    .semantics { if (id == "dm") contentDescription = dmDescription },
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(label, modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp), maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            color = if (shown == id) accent else if (id == "dm" && unread > 0) Amber.DmNick else Amber.Muted))
                     Box(Modifier.fillMaxWidth().height(2.dp).background(if (shown == id) accent else Amber.Sidebar))
                 }
             }

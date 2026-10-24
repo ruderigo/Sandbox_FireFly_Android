@@ -8,11 +8,17 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0: one person on a Stump, over LoRa and Wi-Fi** (for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.1** (sandbox; the stable release is 0.5.0, for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1-beta.1
+- A Stump's private messages tab is an envelope, **✉ (0)**, instead of
+  "Private (0)" (a screen reader still says "Private"); it turns pink when
+  something is unread. The tabs are spaced by need: more room for the
+  room's name, less for the envelope.
 
 ### 0.5.0: one person on a Stump, over LoRa and Wi-Fi
 Everything from the ten betas below, in short:
