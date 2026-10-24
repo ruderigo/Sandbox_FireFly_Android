@@ -360,4 +360,9 @@
     <string name="stump_offline">%1$s est hors ligne</string>
     <string name="stump_online">Répond</string>
     <string name="stump_not_answering">Ne répond pas</string>
+    <string name="board_lora_intro">Le babillard, en LoRa : les titres d\'abord, le texte d\'une annonce quand vous l\'ouvrez.</string>
+    <string name="board_lora_asking">Question au Stump en LoRa…</string>
+    <string name="board_lora_no_answer">Pas encore de réponse en LoRa. Réessayez dans un moment.</string>
+    <string name="board_lora_gone">Cette annonce n\'est plus là (expirée ?).</string>
+    <string name="board_post_lora">Publier en LoRa</string>
 </resources>

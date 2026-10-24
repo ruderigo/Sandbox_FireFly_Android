@@ -385,6 +385,9 @@ def stump_view(key, room=None, on_wifi=None):
     node["viewing"] = room
     node["threads"] = c.store.dm_threads(c.same_stump(key))     # over LoRa and Wi-Fi alike
     node["reach"] = c.stump_reach(key, _flag(on_wifi))          # billboard, files: where from, or why not
+    node["lora_key"] = next((k for k in c.same_stump(key) if k.startswith("mesh:")), None)
+    node["bots"] = sorted(getattr(sess, "bots", ()) | set().union(*[getattr(c.sessions.get(k), "bots", set())
+                                                                    for k in c.same_stump(key)]))
     node["blocked"] = c.store.stump_blocked(c.stump_id(key))
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
     node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
@@ -615,6 +618,46 @@ def _flag(v):
     if v is None or isinstance(v, bool):
         return v
     return str(v).lower() == "true"
+
+
+def stump_board_lora(key, q=""):
+    """The billboard over LoRa (Stump 1.0.0-beta.38): ask for the newest notices (titles)."""
+    c = _need()
+    c.session(_lora_key(c, key)).board_request(q)
+
+
+def stump_board_lora_item(key, pid):
+    c = _need()
+    c.session(_lora_key(c, key)).board_item(pid)
+
+
+def stump_board_lora_post(key, title, body=""):
+    c = _need()
+    return _j(c.session(_lora_key(c, key)).board_post(title, body))
+
+
+def stump_board_lora_view(key):
+    """What the billboard over LoRa has said so far: {"state": idle|waiting|ok|empty|off,
+    "posts": [{"id", "title"}], "items": {id: {"title", "body"} | {"gone"}}, "item", "post"}."""
+    c = _need()
+    sess = c.session(_lora_key(c, key))
+    b = dict(sess.board_lora)
+    pend = sess.board_pending
+    b["waiting_s"] = int(time.time() - pend[2]) if pend else None
+    if pend and time.time() - pend[2] > sess.BOARD_WAIT_S:          # no answer: say so
+        if pend[0] == "list":
+            b["state"] = "no_answer"
+        elif pend[0] == "post":
+            b["post"] = {"state": "no_answer", "title": pend[1]}
+    return _j(b)
+
+
+def _lora_key(c, key):
+    """The LoRa side of this Stump (its billboard over LoRa is asked there)."""
+    key = c.resolve(str(key))
+    if key.startswith("mesh:"):
+        return key
+    return next((k for k in c.same_stump(key) if k.startswith("mesh:")), key)
 
 
 def stump_refresh_wifi(force=False):

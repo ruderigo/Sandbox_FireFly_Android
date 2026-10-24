@@ -8,11 +8,26 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.4** (sandbox; the stable release is 0.5.0, for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.5** (sandbox, for Stump 1.0.0-beta.38; the stable release is 0.5.0). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1-beta.5: the billboard over LoRa (Stump 1.0.0-beta.38)
+- **A LoRa Board tab.** Over LoRa only, the billboard icon now opens: the
+  newest notices' titles (`/board`, at most 5; search with words), a
+  notice's text when you open it (`/board <id>`), and **Post over LoRa**
+  (`/post`, title 80, details 600). Each answer comes back over LoRa, so the
+  tab says when it's asking, and asks nothing twice while an answer is on
+  its way; no answer in 2 minutes says so. Files stay "N/A over LoRa".
+- **Radio down is not "not sent".** A Stump whose radio is down keeps a line
+  for LoRa and sends it when it's back, saying so with a ⧗; FireFly shows
+  that note and no longer marks the line "not sent (too fast)".
+- **Forged Stump beacons are ignored:** a `stump.node` beacon must name its
+  own identity's LXMF address.
+- **Bots aren't DM contacts:** lines marked `"bot": true` (BarKeep, the
+  plugins) leave their author out of "Message someone".
 
 ### 0.5.1-beta.4: one answer for "can I reach this Stump?"
 - **The engine decides, the screen follows.** Whether a Stump's billboard

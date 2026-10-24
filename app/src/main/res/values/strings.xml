@@ -360,4 +360,9 @@
     <string name="stump_offline">%1$s is offline</string>
     <string name="stump_online">Answering</string>
     <string name="stump_not_answering">Not answering</string>
+    <string name="board_lora_intro">The billboard, over LoRa: titles first, a notice\'s text when you open it.</string>
+    <string name="board_lora_asking">Asking the Stump over LoRa…</string>
+    <string name="board_lora_no_answer">No answer over LoRa yet. Try again in a moment.</string>
+    <string name="board_lora_gone">This notice is gone (expired?).</string>
+    <string name="board_post_lora">Post over LoRa</string>
 </resources>

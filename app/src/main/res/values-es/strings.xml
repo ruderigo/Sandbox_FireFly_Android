@@ -360,4 +360,9 @@
     <string name="stump_offline">%1$s está fuera de línea</string>
     <string name="stump_online">Responde</string>
     <string name="stump_not_answering">No responde</string>
+    <string name="board_lora_intro">El tablón, por LoRa: primero los títulos, el texto de un anuncio al abrirlo.</string>
+    <string name="board_lora_asking">Preguntando al Stump por LoRa…</string>
+    <string name="board_lora_no_answer">Aún no hay respuesta por LoRa. Inténtalo de nuevo en un momento.</string>
+    <string name="board_lora_gone">Este anuncio ya no está (¿caducado?).</string>
+    <string name="board_post_lora">Publicar por LoRa</string>
 </resources>

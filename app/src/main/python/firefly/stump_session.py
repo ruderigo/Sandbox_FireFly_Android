@@ -460,6 +460,11 @@ class StumpSession:
         self.greeted_at = 0.0
         self.greeting_nick = None           # the /nick line we sent as part of the greeting
         self.hello_v2 = False               # this Stump speaks /hello (beta.32)
+        # The billboard over LoRa (Stump 1.0.0-beta.38): asked with /board, read from its answer.
+        self.board_lora = {"state": "idle", "q": "", "posts": [], "items": {}, "at": 0.0,
+                           "item": None, "post": {"state": "idle"}}
+        self.board_pending = None           # ("list" | "item" | "post", arg, when asked)
+        self.bots = set()                   # nicks whose lines are a bot's ("bot": true, beta.36): no DMs to them
         self.auth_quiet, self.auth_before = False, None
         self.folded = set()                 # "renamed" pairs already applied
         self.offline_reason = None          # why the last Wi-Fi poll got nothing ("connection refused"…)
@@ -571,6 +576,87 @@ class StumpSession:
         self._note_join(line)
         self.last_command_at = time.time()
         self.pipe.send(line, control=line.startswith("/auth"))
+
+    BOARD_WAIT_S = 120                  # an answer over LoRa can take a while
+
+    def board_request(self, q=""):
+        """/board [words]: the newest notices (at most 5), their titles."""
+        q = " ".join(str(q or "").split())
+        with self.lock:
+            self.board_pending = ("list", q, time.time())
+            self.board_lora.update(state="waiting", q=q, at=time.time())
+        self.pipe.send(f"/board {q}".rstrip())
+        self.core.emit({"type": "changed"})
+
+    def board_item(self, pid):
+        """/board <id>: one notice, its title and body."""
+        pid = str(pid).lstrip("#")
+        with self.lock:
+            self.board_pending = ("item", pid, time.time())
+            self.board_lora["item"] = pid
+        self.pipe.send(f"/board {pid}")
+        self.core.emit({"type": "changed"})
+
+    def board_post(self, title, body=""):
+        """/post <title> | <body>: title 80, body 600 (its line breaks kept)."""
+        title = " ".join(str(title or "").split())[:80]
+        body = str(body or "").strip()[:600]
+        if not title:
+            return False
+        with self.lock:
+            self.board_pending = ("post", title, time.time())
+            self.board_lora["post"] = {"state": "waiting", "title": title}
+        self.pipe.send(f"/post {title} | {body}" if body else f"/post {title}")
+        self.core.emit({"type": "changed"})
+        return True
+
+    def _board_answer(self, content):
+        """An LXMF batch that answers our pending /board or /post: consumed (not a room line).
+        -> True if it was one."""
+        pend = self.board_pending
+        if not pend or time.time() - pend[2] > self.BOARD_WAIT_S:
+            return False
+        lines = [l for l in str(content or "").split("\n")]
+        nonblank = [l for l in lines if l.strip()]
+        if not nonblank:
+            return False
+        first = nonblank[0].strip()
+        low = first.lower()
+        kind, arg, _ = pend
+        b = self.board_lora
+        if kind == "list":
+            if all(stump.BOARD_LINE.match(l.strip()) for l in nonblank):
+                b.update(state="ok", posts=[{"id": m.group(1), "title": m.group(2)}
+                                            for m in (stump.BOARD_LINE.match(l.strip()) for l in nonblank)],
+                         at=time.time())
+            elif any(x in low for x in stump.BOARD_OFF):
+                b.update(state="off", posts=[], at=time.time())
+            elif any(x in low for x in stump.BOARD_NOTHING):
+                b.update(state="empty", posts=[], at=time.time())
+            else:
+                return False
+        elif kind == "item":
+            m = stump.BOARD_LINE.match(first)
+            if m and (m.group(1).startswith(arg) or arg.startswith(m.group(1))):
+                body = "\n".join(lines[lines.index(nonblank[0]) + 1:]).strip()
+                b["items"][arg] = {"id": arg, "title": m.group(2), "body": body}
+            elif any(x in low for x in stump.BOARD_GONE) and arg in first:
+                b["items"][arg] = {"id": arg, "gone": True}
+            elif any(x in low for x in stump.BOARD_OFF):
+                b.update(state="off")
+            else:
+                return False
+        else:                                   # post: "✓ #id", or the reason it wasn't
+            m = stump.POST_OK.match(first)
+            if m:
+                b["post"] = {"state": "ok", "id": m.group(1), "title": arg}
+            elif len(nonblank) == 1 and not first.startswith(("<", "[DM]", "*", "✓ ", "✗ ", "→ ", "✎ ")):
+                b["post"] = {"state": "refused", "message": first, "title": arg}
+            else:
+                return False
+        self.board_pending = None
+        self.core.emit({"type": "changed"})
+        return True
 
     def send_dm(self, nick, text):
         nick, text = nick.strip().lstrip("~"), text.strip()
@@ -757,6 +843,8 @@ class StumpSession:
             self.batch_room = None
 
     def _handle_batch(self, content, audio):
+        if self.batch_room is None and audio is None and self._board_answer(content):
+            return                          # the answer to our /board or /post
         for parsed in stump.parse_message(content):
             if parsed["kind"] == "dm":
                 self._handle_dm(parsed["author"], parsed["text"], audio=audio)
@@ -812,6 +900,8 @@ class StumpSession:
             if (self.store.stump_node(self.key) or {}).get("auth") != "waiting":
                 self.start_auth(quiet=True)
         for m in data.get("messages") or []:
+            if m.get("bot") and m.get("nick"):
+                self.bots.add(str(m["nick"]))       # a bot's lines (beta.36): not a DM contact
             if m.get("id") in self.seen_remote:
                 continue
             self.seen_remote.add(m.get("id"))
@@ -918,6 +1008,10 @@ class StumpSession:
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "needs_auth":                         # not "auth_…": those are the /auth tokens
             return self._needs_auth(p["text"])
+        if k == "lora_waits":
+            # The Stump's radio is down: our line is kept and goes out when it's back. Say so; it
+            # wasn't refused (no "not sent").
+            return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "slow":
             # ⧗ is the node saying "slow down": lines too fast (3 at once, then one every 2 s),
             # too many voice notes, plugin commands or wrong passwords. It names nothing: it

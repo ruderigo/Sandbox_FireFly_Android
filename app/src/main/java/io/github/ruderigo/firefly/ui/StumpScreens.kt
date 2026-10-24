@@ -211,6 +211,11 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
     val reachState = settled(reachNow?.optString("state") ?: if (mesh) "lora" else "wifi") { if (it == "wifi") 300L else 1500L }
     val webKey = reachNow?.optString("web")?.takeIf { reachState == "wifi" && it.isNotBlank() && it != "null" }
         ?: key.takeIf { !mesh && reachState == "wifi" }
+    // Over LoRa only, the billboard is asked of the Stump's LoRa side (/board, Stump 1.0.0-beta.38).
+    val loraKey = view.optString("lora_key").takeIf { it.isNotBlank() && it != "null" }
+    val loraBoard = engineData(JSONObject(), loraKey, reachState) {
+        if (loraKey != null && reachState == "lora") Engine.obj("stump_board_lora_view", loraKey) else JSONObject()
+    }
     var board by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
     var shelf by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
     var plugins by remember(key) { mutableStateOf<JSONObject?>(null) }     // its !commands
@@ -322,7 +327,9 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             Triple("board", R.drawable.ic_tab_board to R.drawable.ic_tab_board_new, false),
             Triple("files", R.drawable.ic_tab_files to R.drawable.ic_tab_files_new, false))
         val offered = mapOf("dm" to true,
-            "board" to (webKey != null && board.webState() != "off"),      // still loading counts as offered
+            // the billboard over Wi-Fi, or over LoRa (/board); still loading counts as offered
+            "board" to ((webKey != null && board.webState() != "off") ||
+                        (reachState == "lora" && loraKey != null && loraBoard.optString("state") != "off")),
             "files" to (webKey != null && shelf.webState() != "off"))
         val shown = if (tab == "room" || offered[tab] == true) tab else "room"   // a tab whose feature turned out off
         val tabDescriptions = mapOf("dm" to stringResource(R.string.private_tab, unread),
@@ -338,8 +345,11 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         val texts = mapOf("lora" to stringResource(R.string.tab_not_over_lora), "no_wifi" to stringResource(R.string.tab_no_wifi),
             "offline" to stringResource(R.string.stump_offline, stumpName),
             "board_off" to stringResource(R.string.tab_board_off), "files_off" to stringResource(R.string.tab_files_off))
-        fun reason(id: String, state: String) =
-            if (state == "wifi") texts.getValue("${id}_off") else texts[state] ?: texts.getValue("offline")
+        fun reason(id: String, state: String) = when {
+            state == "wifi" -> texts.getValue("${id}_off")
+            state == "lora" && id == "board" && loraBoard.optString("state") == "off" -> texts.getValue("board_off")
+            else -> texts[state] ?: texts.getValue("offline")
+        }
         fun bounceBack(id: String, why: String, startedAt: Long = System.currentTimeMillis()) {
             scope.launch {
                 busy = true
@@ -364,7 +374,7 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
                 val r = runCatching { JSONObject(withContext(Dispatchers.IO) { Engine.call("stump_reach", key, onWifi, true) }) }
                     .getOrNull()
                 val state = r?.optString("state") ?: "offline"
-                if (state == "wifi") {
+                if (state == "wifi" || (state == "lora" && id == "board" && loraKey != null)) {
                     bounce = null; tab = id; busy = false
                 } else {
                     busy = false
@@ -420,7 +430,8 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             Column(Modifier.fillMaxSize()) {
                 when (shown) {
                     "dm" -> PrivatePane(key, view, threads, mesh, go)
-                    "board" -> BoardPane(webKey ?: key, board) { board = it }
+                    "board" -> if (webKey == null && loraKey != null) LoraBoardPane(loraKey, loraBoard)
+                               else BoardPane(webKey ?: key, board) { board = it }
                     "files" -> FilesPane(webKey ?: key, shelf) { shelf = it }
                     else -> RoomPane(key, view, mesh, plugins)
                 }
@@ -522,8 +533,9 @@ private fun ColumnScope.PrivatePane(key: String, view: JSONObject, threads: List
     // People first, then the Stumps (🪵, as the node's web chat groups them). On a chain,
     // people on other Stumps are listed as nick@thatstump and reached the same way.
     val blocked = view.optJSONArray("blocked")?.strings() ?: emptyList()
+    val bots = view.optJSONArray("bots")?.strings()?.toSet() ?: emptySet()     // "bot": true (beta.36): no DMs to them
     val others = (view.optJSONArray("users")?.strings() ?: emptyList()).map { it.removePrefix("~") }
-        .filter { it != me && it !in talking && it.lowercase() !in blocked }.sortedBy { it in stumps }
+        .filter { it != me && it !in talking && it.lowercase() !in blocked && it !in bots }.sortedBy { it in stumps }
     var to by remember { mutableStateOf("") }
     var choosing by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<String?>(null) }

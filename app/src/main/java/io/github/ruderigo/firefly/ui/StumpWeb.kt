@@ -480,3 +480,83 @@ fun PluginChips(plugins: JSONObject?, onPick: (String) -> Unit) {
         }
     }
 }
+
+
+/**
+ * The billboard over LoRa (Stump 1.0.0-beta.38): the newest notices' titles from /board, a
+ * notice's text when it's opened (/board <id>), and /post. Each answer comes back over LoRa,
+ * so asking shows that it's waiting; nothing is asked twice while an answer is on its way.
+ */
+@Composable
+fun ColumnScope.LoraBoardPane(loraKey: String, b: JSONObject) {
+    var query by remember(loraKey) { mutableStateOf("") }
+    var title by remember(loraKey) { mutableStateOf("") }
+    var body by remember(loraKey) { mutableStateOf("") }
+    var open by remember(loraKey) { mutableStateOf<String?>(null) }
+    val state = b.optString("state", "idle")
+    val posts = b.optJSONArray("posts")?.objects() ?: emptyList()
+    val items = b.optJSONObject("items") ?: JSONObject()
+    val asking = state == "waiting"
+    val post = b.optJSONObject("post") ?: JSONObject()
+    val posting = post.optString("state") == "waiting"
+    LaunchedEffect(loraKey) { if (state == "idle") Engine.fire("stump_board_lora", loraKey, "") }     // first look
+    // A notice just posted: the list again, with it.
+    LaunchedEffect(post.optString("state"), post.optString("id")) {
+        if (post.optString("state") == "ok") { title = ""; body = ""; Engine.fire("stump_board_lora", loraKey, query.trim()) }
+    }
+    LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 8.dp)) {
+        item { WebHeader(stringResource(R.string.board_lora_intro), asking) { if (!asking) Engine.fire("stump_board_lora", loraKey, query.trim()) } }
+        item { SearchRow(query, { query = it }, stringResource(R.string.board_search_hint)) {
+            if (!asking) Engine.fire("stump_board_lora", loraKey, query.trim()) } }
+        when (state) {
+            "idle", "waiting" -> if (posts.isEmpty()) item { Empty(stringResource(R.string.board_lora_asking)) }
+            "no_answer" -> item { Empty(stringResource(R.string.board_lora_no_answer)) }
+            "empty" -> item { Empty(stringResource(R.string.board_empty)) }
+            "off" -> item { Empty(stringResource(R.string.board_off)) }
+        }
+        if (state == "ok" || (asking && posts.isNotEmpty())) items(posts, key = { it.optString("id") }) { p ->
+            val id = p.optString("id")
+            val notice = items.optJSONObject(id)
+            Column(Modifier.fillMaxWidth().clickable {
+                    open = if (open == id) null else id
+                    // its text, asked once (not again while that answer is on its way)
+                    if (open == id && notice == null && b.optString("item") != id) Engine.fire("stump_board_lora_item", loraKey, id)
+                }.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                Text(p.optString("title"), style = MaterialTheme.typography.titleSmall)
+                if (open == id) {
+                    val text = when {
+                        notice == null -> stringResource(R.string.board_lora_asking)
+                        notice.optBoolean("gone") -> stringResource(R.string.board_lora_gone)
+                        else -> notice.optString("body").ifBlank { "—" }
+                    }
+                    Text(text, style = MaterialTheme.typography.bodyMedium.copy(color = if (notice == null) Amber.Dim else Amber.Text),
+                        modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
+    // Writing: the same limits as over Wi-Fi (title 80, details 600).
+    Column(Modifier.fillMaxWidth().background(Amber.Sidebar).navigationBarsPadding().imePadding().padding(8.dp)) {
+        when (post.optString("state")) {
+            "ok" -> stringResource(R.string.board_posted) to true
+            "refused" -> post.optString("message") to false
+            "no_answer" -> stringResource(R.string.board_lora_no_answer) to false
+            else -> null
+        }?.let { (text, ok) ->
+            Text(text, style = MaterialTheme.typography.labelMedium.copy(color = if (ok) Amber.Ember else Amber.Error),
+                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
+        }
+        Field(title, { title = it.replace("\n", " ").take(TITLE_MAX) }, Modifier.fillMaxWidth(), hint = stringResource(R.string.board_title_hint))
+        Spacer(Modifier.height(6.dp))
+        Field(body, { body = it.take(BODY_MAX) }, Modifier.fillMaxWidth().heightIn(min = 44.dp, max = 140.dp),
+            hint = stringResource(R.string.board_body_hint), singleLine = false)
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("${title.length}/$TITLE_MAX · ${body.length}/$BODY_MAX", style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.weight(1f).padding(start = 4.dp))
+            Button(stringResource(if (posting) R.string.board_posting else R.string.board_post_lora),
+                enabled = title.isNotBlank() && !posting) {
+                Engine.fire("stump_board_lora_post", loraKey, title, body)
+            }
+        }
+    }
+}
