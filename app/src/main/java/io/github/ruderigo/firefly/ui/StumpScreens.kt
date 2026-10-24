@@ -1,5 +1,9 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package io.github.ruderigo.firefly.ui
 
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -272,27 +276,39 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         // icons sharing the right half (only those this Stump offers here). An icon is outlined
         // when there's nothing new and filled when there is (unread DMs; later, new notices or
         // files).
-        val iconTabs = buildList {
-            add(Triple("dm", R.drawable.ic_tab_envelope to R.drawable.ic_tab_envelope_new, unread > 0))
-            if (!mesh && board.webState() != "off") add(Triple("board", R.drawable.ic_tab_board to R.drawable.ic_tab_board_new, false))
-            if (!mesh && shelf.webState() != "off") add(Triple("files", R.drawable.ic_tab_files to R.drawable.ic_tab_files_new, false))
-        }
-        val shown = if (tab == "room" || iconTabs.any { it.first == tab }) tab else "room"   // a tab whose feature turned out off
+        // The same layout over Wi-Fi and LoRa: a tab this Stump doesn't offer here (the billboard
+        // and files over LoRa, or switched off) stays in place, dimmed, and can't be opened.
+        val iconTabs = listOf(
+            Triple("dm", R.drawable.ic_tab_envelope to R.drawable.ic_tab_envelope_new, unread > 0),
+            Triple("board", R.drawable.ic_tab_board to R.drawable.ic_tab_board_new, false),
+            Triple("files", R.drawable.ic_tab_files to R.drawable.ic_tab_files_new, false))
+        val offered = mapOf("dm" to true,
+            "board" to (!mesh && board.webState() != "off"), "files" to (!mesh && shelf.webState() != "off"))
+        val shown = if (tab == "room" || offered[tab] == true) tab else "room"   // a tab whose feature turned out off
         val tabDescriptions = mapOf("dm" to stringResource(R.string.private_tab, unread),
             "board" to stringResource(R.string.tab_board), "files" to stringResource(R.string.tab_files))
         Row(Modifier.fillMaxWidth().background(Amber.Sidebar).height(IntrinsicSize.Min)) {
-            Column(Modifier.weight(1f).fillMaxHeight().clickable { tab = "room" }, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("#" + view.optString("room", "…"), modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelLarge.copy(color = if (shown == "room") Amber.Ember else Amber.Muted))
+            Column(Modifier.weight(1f).fillMaxHeight().clickable { tab = "room" }, horizontalAlignment = Alignment.Start) {
+                // "#room (topic)", from the left; too long for the half, it scrolls by itself so it
+                // can be read through, left to right.
+                val topic = view.optString("topic").takeIf { it.isNotBlank() && it != "null" }
+                val roomColor = if (shown == "room") Amber.Ember else Amber.Muted
+                Text(buildAnnotatedString {
+                        withStyle(SpanStyle(color = roomColor)) { append("#" + view.optString("room", "…")) }
+                        if (topic != null) withStyle(SpanStyle(color = Amber.Dim, fontWeight = FontWeight.Normal)) { append("  ($topic)") }
+                    },
+                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
+                        .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500, repeatDelayMillis = 2500),
+                    maxLines = 1, style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.fillMaxWidth().height(2.dp).background(if (shown == "room") Amber.Ember else Amber.Sidebar))
             }
             Row(Modifier.weight(1f)) {
                 iconTabs.forEach { (id, icons, isNew) ->
                     val accent = if (id == "dm") Amber.DmNick else Amber.Ember
-                    val color = when { shown == id -> accent; isNew -> accent; else -> Amber.Muted }
-                    Column(Modifier.weight(1f).fillMaxHeight().clickable { tab = id }
+                    val available = offered[id] == true
+                    val color = when { !available -> Amber.Border; shown == id -> accent; isNew -> accent; else -> Amber.Muted }
+                    Column(Modifier.weight(1f).fillMaxHeight().clickable(enabled = available) { tab = id }
                         .semantics { contentDescription = tabDescriptions.getValue(id) },
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         Spacer(Modifier.weight(1f))
@@ -335,9 +351,7 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
         Text(stringResource(R.string.list_rooms), modifier = Modifier.clip(Small).clickable { Engine.fire("stump_command", key, "/rooms") }
             .padding(horizontal = 8.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
     }
-    view.optString("topic").takeIf { it.isNotBlank() && it != "null" }?.let {
-        Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-    }
+    // (The topic is in the room's tab, after its name.)
     val lines = view.optJSONArray("lines")?.objects() ?: emptyList()
     val list = rememberLazyListState()
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }

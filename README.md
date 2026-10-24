@@ -16,8 +16,12 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 
 ### 0.5.1-beta.2: a new navigation on a Stump's screen
 - **The room on the left half; icons on the right half** for private
-  messages, the billboard and files, sharing it equally. Only what the
-  Stump offers here is shown: over LoRa that's the envelope alone.
+  messages, the billboard and files, sharing it equally. The same layout
+  over Wi-Fi and LoRa: what the Stump doesn't offer here (the billboard and
+  files over LoRa) is dimmed and can't be opened.
+- **The room tab reads `#room (topic)`,** from the left; when it's longer
+  than its half, it scrolls by itself so it can be read through. (The
+  topic's own line above the chat is gone: it's in the tab.)
 - **Outline: nothing new. Filled: something new.** The envelope fills when
   a private message is unread (no count). The billboard and files icons
   have the same two forms, ready for "new notices" and "new files" later.
