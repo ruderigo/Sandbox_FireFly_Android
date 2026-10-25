@@ -366,4 +366,10 @@
     <string name="board_lora_gone">This notice is gone (expired?).</string>
     <string name="board_post_lora">Post over LoRa</string>
     <string name="rooms_refreshing">refreshing…</string>
+    <string name="radio_retuning">Saved · retuning the RNode…</string>
+    <string name="radio_confirmed">The RNode confirmed %1$s MHz</string>
+    <string name="radio_saved_no_rnode">Saved · no RNode connected: it applies when one is</string>
+    <string name="radio_not_confirmed">The RNode hasn\'t confirmed the new channel: see LoRa radio in the Network tab</string>
+    <string name="on_air_confirmed">On air now, confirmed by the RNode: %1$s</string>
+    <string name="not_confirmed">(not confirmed)</string>
 </resources>

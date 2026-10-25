@@ -8,11 +8,28 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.6** (sandbox, for Stump 1.0.0-beta.38; the stable release is 0.5.0). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.7** (sandbox, for Stump 1.0.0-beta.38; the stable release is 0.5.0). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1-beta.7: a frequency change is only "done" when the RNode says so
+- Reported with an RF sniffer: set to 907 MHz, the signal stayed on 915.
+  Reticulum's RNode driver calls a radio set up without the RNode
+  confirming its frequency (it skips that one check while no report has
+  come back). FireFly now waits for the RNode's own report of its
+  frequency, bandwidth and SF, and goes online only when they match what
+  was asked; it asks once more when no report comes. An RNode that stays on
+  another frequency is refused with what it reports ("the RNode reports
+  915.000 MHz, not the 907.000 MHz asked: it didn't change"); one that never
+  reports is refused too.
+- **Settings › Radio channel waits for the RNode:** "Saved · retuning the
+  RNode…", then "The RNode confirmed 907.000 MHz", or its own answer, or
+  "no RNode connected". The on-air line and the Network tab's channel say
+  "confirmed by the RNode" (✓) when the radio's report matches.
+- What FireFly can confirm is what the RNode reports; an RF sniffer remains
+  the proof on air.
 
 ### 0.5.1-beta.6: LoRa billboard answers stay in the Board tab (field fix)
 - Reported: after a long post over LoRa, the answer to opening a notice

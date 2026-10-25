@@ -366,4 +366,10 @@
     <string name="board_lora_gone">Cette annonce n\'est plus là (expirée ?).</string>
     <string name="board_post_lora">Publier en LoRa</string>
     <string name="rooms_refreshing">actualisation…</string>
+    <string name="radio_retuning">Enregistré · réglage du RNode…</string>
+    <string name="radio_confirmed">Le RNode a confirmé %1$s MHz</string>
+    <string name="radio_saved_no_rnode">Enregistré · aucun RNode connecté : appliqué dès qu\'il y en a un</string>
+    <string name="radio_not_confirmed">Le RNode n\'a pas confirmé le nouveau canal : voir Radio LoRa dans l\'onglet Réseau</string>
+    <string name="on_air_confirmed">En ondes, confirmé par le RNode : %1$s</string>
+    <string name="not_confirmed">(non confirmé)</string>
 </resources>
