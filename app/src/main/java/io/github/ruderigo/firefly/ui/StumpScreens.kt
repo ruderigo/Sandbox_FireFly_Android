@@ -240,6 +240,11 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         }
     }
     val auth = view.optString("auth", "none")
+    // Into a Stump only once it knows who we are: FireFly verifies itself (Wi-Fi and LoRa) and
+    // the room waits behind a popup until it's done, or the user chooses to go in anyway.
+    var entered by remember(openedAs) { mutableStateOf(false) }
+    if (!entered) VerifyGate(key, view.optString("name").ifBlank { key.substringAfter(":") }, mesh,
+        onEnter = { entered = true }, onBack = back)
     val threads = view.optJSONArray("threads")?.objects() ?: emptyList()
     val unread = threads.sumOf { it.optInt("unread") }
     Column(Modifier.fillMaxSize()) {
@@ -713,6 +718,81 @@ private fun StumpActions(name: String, onDismiss: () -> Unit, onHide: () -> Unit
         dismissButton = {
             Text(stringResource(R.string.cancel), modifier = Modifier.clip(Small).clickable { onDismiss() }.padding(10.dp),
                 style = MaterialTheme.typography.labelLarge.copy(color = Amber.Muted))
+        })
+}
+
+/**
+ * Entering a Stump: "Verifying you with <name>…" until the Stump has FireFly's signature
+ * (/hello over Wi-Fi, /auth over LoRa), then the room opens by itself. Already verified this
+ * run: no popup at all. A failure says why and offers Try again, Go in anyway, or Back.
+ */
+@Composable
+private fun VerifyGate(key: String, name: String, mesh: Boolean, onEnter: () -> Unit, onBack: () -> Unit) {
+    var state by remember(key) { mutableStateOf<String?>(null) }      // null: not asked yet (no popup)
+    var detail by remember(key) { mutableStateOf("") }
+    var attempt by remember(key) { mutableIntStateOf(0) }
+    var elapsed by remember(key) { mutableIntStateOf(0) }
+    LaunchedEffect(key, attempt) {
+        val started = System.currentTimeMillis()
+        var again = true                    // entering, or Try again: ask anew; then only read
+        while (true) {
+            val v = Engine.obj("stump_verify", key, again)
+            again = false
+            val st = v.optString("state", "verifying")
+            elapsed = ((System.currentTimeMillis() - started) / 1000).toInt()
+            if (st == "ok" || st == "not_needed") {
+                if (state != null) { state = "ok"; delay(600) }        // seen: "Verified ✓"
+                onEnter(); return@LaunchedEffect
+            }
+            state = st
+            detail = v.optString("detail").takeIf { it != "null" } ?: ""
+            if (st == "failed") return@LaunchedEffect
+            delay(700)
+        }
+    }
+    val st = state ?: return
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onBack, containerColor = Amber.Panel, shape = Large,
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = false),
+        title = { Text(stringResource(R.string.verify_gate_title, name), style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Column {
+                when (st) {
+                    "ok" -> Text(stringResource(R.string.verify_gate_ok),
+                        style = MaterialTheme.typography.bodyMedium.copy(color = Amber.Ember))
+                    "failed" -> {
+                        Text(stringResource(R.string.verify_failed, detail.ifBlank { "?" }),
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Amber.Error))
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(R.string.verify_gate_failed_help), style = MaterialTheme.typography.bodySmall)
+                    }
+                    else -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = Amber.Ember,
+                                strokeWidth = 2.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text(stringResource(R.string.verify_gate_body), style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f))
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(if (mesh) R.string.verify_gate_lora else R.string.verify_gate_wifi, elapsed),
+                            style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (st == "failed") Row {
+                Text(stringResource(R.string.verify_gate_enter_anyway), modifier = Modifier.clip(Small)
+                    .clickable { onEnter() }.padding(10.dp), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Muted))
+                Text(stringResource(R.string.verify_gate_retry), modifier = Modifier.clip(Small)
+                    .clickable { state = "verifying"; elapsed = 0; attempt++ }.padding(10.dp),
+                    style = MaterialTheme.typography.labelLarge.copy(color = Amber.Ember))
+            }
+        },
+        dismissButton = {
+            if (st != "ok") Text(stringResource(R.string.verify_gate_back), modifier = Modifier.clip(Small)
+                .clickable { onBack() }.padding(10.dp), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Muted))
         })
 }
 

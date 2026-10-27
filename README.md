@@ -8,11 +8,26 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.7** (sandbox, for Stump 1.0.0-beta.38; the stable release is 0.5.0). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.8** (sandbox, for Stump 1.0.0-beta.38; the stable release is 0.5.0). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1-beta.8: verified before you go in
+- Entering a Stump now waits behind a "Verifying you with <Stump>…" popup
+  until the Stump has FireFly's signature, then the room opens by itself.
+  Over Wi-Fi that's the /hello FireFly already sends when the Stump appears
+  (a second or two); over LoRa FireFly now sends /auth itself on entering
+  (about 10 s, up to a minute and a half) — before, LoRa waited for a tap
+  on "Verify me". Quiet: no AUTH- lines in the room.
+- Already verified this run: no popup. A Stump without /auth: nothing to
+  prove, straight in. A refusal, no answer, no radio or an unreachable Stump
+  says why, with Try again, Go in anyway (reading works; writing may be
+  refused) and Back. A failure never retries on its own while the popup is
+  up. Stumps only heard over LoRa aren't sent anything (no airtime spent).
+- Tests: run_verify_gate (Wi-Fi /hello, LoRa challenge and AUTH-OK, refusal
+  and Try again, timeout, no /auth, no radio).
 
 ### 0.5.1-beta.7: a frequency change is only "done" when the RNode says so
 - Reported with an RF sniffer: set to 907 MHz, the signal stayed on 915.

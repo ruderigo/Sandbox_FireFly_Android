@@ -469,6 +469,11 @@ class StumpSession:
         self.board_asked = {"list": None, "items": {}, "post": None}     # (arg, when) / {id: when}
         self.bots = set()                   # nicks whose lines are a bot's ("bot": true, beta.36): no DMs to them
         self.auth_quiet, self.auth_before = False, None
+        # Entering a Stump waits for this (the "verifying…" popup): FireFly proves who it is to
+        # every Stump, over Wi-Fi (/hello or /auth) and LoRa (/auth), before the room opens.
+        # "idle", "verifying", "ok", "not_needed" (a Stump without /auth), "failed" (+ detail).
+        # This run only: a Stump forgets the link after a reboot, so each run proves it again.
+        self.verify = {"state": "idle", "detail": "", "at": 0.0}
         self.folded = set()                 # "renamed" pairs already applied
         self.offline_reason = None          # why the last Wi-Fi poll got nothing ("connection refused"…)
         self.hw = None                      # the node's radio state from the poll (Stump 1.0.0-beta.5+)
@@ -733,6 +738,7 @@ class StumpSession:
         if self.pipe.kind == MESH and not self.core.can_reach(self.pipe.address):
             # No radio and no other way to this Stump: the challenge could never arrive.
             self._save(auth="failed", auth_detail="no radio, and no other way to reach this Stump")
+            self._verify_set("failed", "no radio, and no other way to reach this Stump")
             return False
         with self.lock:
             if self.auth and self.auth.busy and time.time() - self.auth.started < stump.AUTH_WINDOW_S + 30:
@@ -742,8 +748,28 @@ class StumpSession:
             self.auth_before = (self.store.stump_node(self.key) or {}).get("auth")
             line = self.auth.start()
         self._save(auth="waiting", auth_detail="")
+        self._verify_set("verifying")
         self.pipe.send(line, control=True)
         return True
+
+    def _verify_set(self, state, detail=""):
+        self.verify = {"state": state, "detail": detail or "", "at": time.time()}
+
+    def verify_now(self, again=False):
+        """Entering this Stump: prove who we are unless it's done (or on its way). `again`:
+        after a failure (Try again). -> the verify state."""
+        st = self.verify["state"]
+        if st in ("ok", "not_needed"):
+            return dict(self.verify)
+        if st == "verifying" and time.time() - self.verify["at"] < stump.AUTH_WINDOW_S + 40:
+            return dict(self.verify)
+        if st == "failed" and not again:     # entering (or Try again) asks anew; a poll only reads
+            return dict(self.verify)
+        if self.auth and self.auth.busy:
+            self.auth = None                    # a stale one: start over with a fresh challenge
+        self._verify_set("verifying")
+        self.greet(force=True)
+        return dict(self.verify)
 
     def hello_needed(self):
         """The Stump asks for the greeting (a poll or a send said "hello": "required")."""
@@ -782,6 +808,7 @@ class StumpSession:
         threading.Thread(target=self._hello_exchange, daemon=True, name="stump-hello").start()
 
     def _hello_exchange(self):
+        self._verify_set("verifying")
         name = stump.clean_nick(self.core.settings["display_name"])
         prefer = self.core.settings.get("stump_prefer", "wifi")
         known = (self.store.stump_node(self.key) or {}).get("lxmf")
@@ -800,6 +827,7 @@ class StumpSession:
                 self._save(auth="ok", auth_detail=self.core.identity.hash.hex(),
                            **({"nick": self.nick} if self.nick else {}))
             self._hello_done()
+            self._verify_set("ok")
             if outcome == "name":               # greeted, but under another name: say why
                 self.store.add_line(self.key, self.room, "reply", str(a.get("message") or
                                     f"the name {name} is someone else's on this Stump: choose another in Settings"))
@@ -809,13 +837,18 @@ class StumpSession:
         elif outcome == "forged":
             self._save(auth="failed", auth_detail="this Stump's signature doesn't check out: "
                                                   "it isn't the Stump it claims to be, so FireFly didn't introduce itself")
+            self._verify_set("failed", "this Stump's signature doesn't check out: it isn't the Stump it claims to be")
         elif outcome == "other":
             self._save(auth="none", auth_detail="")
+            self._verify_set("failed", "another Stump answers at this address now: looking for this one")
             self.set_online(False, f"another Stump answers at this address now ({(a or {}).get('stump') or 'unknown'})")
             threading.Thread(target=self.relocate, daemon=True).start()     # find ours by its identity
         elif outcome == "refused":
-            self._save(auth="failed", auth_detail=str((a or {}).get("message") or "the Stump refused FireFly's signature"))
-        # "unreachable": the poll says so, and the next "required" greets again
+            why = str((a or {}).get("message") or "the Stump refused FireFly's signature")
+            self._save(auth="failed", auth_detail=why)
+            self._verify_set("failed", why)
+        else:   # "unreachable": the poll says so too, and the next "required" greets again
+            self._verify_set("failed", self.offline_reason or "the Stump didn't answer")
 
     def _greeting_nick(self):
         """After AUTH-OK in a greeting: our name, unless the Stump already has it (from LoRa)."""
@@ -853,6 +886,7 @@ class StumpSession:
         with self.lock:
             if self.auth and self.auth.busy and time.time() - self.auth.started > stump.AUTH_WINDOW_S + 30:
                 self.auth = None
+                self._verify_set("failed", "no answer from the Stump" + (" over LoRa" if self.pipe.kind == MESH else ""))
                 if self.auth_quiet:             # our own try on connecting: no news is no failure
                     self._save(auth=self.auth_before or "none", auth_detail="")
                 else:
@@ -1017,6 +1051,7 @@ class StumpSession:
         if unsent and sent and sent.lower().startswith("/auth"):
             self.auth = None
             self._save(auth="failed", auth_detail=text)
+            self._verify_set("failed", text)
             return
         if unsent and sent and not sent.startswith(("/", "!")):
             line_id = self.store.add_line(self.key, self.room, "msg", sent, nick=self.my_nick(), mine=True)
@@ -1047,6 +1082,7 @@ class StumpSession:
         if k == "unknown_command":
             if self.auth_quiet and self.auth and self.auth.busy and "/auth" in p["text"]:
                 self.auth = None                # a node without /auth: nothing to prove there
+                self._verify_set("not_needed")
                 return self._save(auth=self.auth_before or "none", auth_detail="")
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "needs_auth":                         # not "auth_…": those are the /auth tokens
@@ -1281,11 +1317,13 @@ class StumpSession:
             self.pipe.send(reply, control=True)
         if sess.state == stump.AuthSession.OK:
             self._save(auth="ok", auth_detail=sess.identity_hash or "")
+            self._verify_set("ok")
             if self.hello == "required":
                 self._greeting_nick()           # the second half of the greeting
             if not self.auth_quiet:
                 self.store.add_line(self.key, self.room, "reply", "AUTH-OK " + (sess.identity_hash or ""))
         elif sess.state == stump.AuthSession.FAILED:
+            self._verify_set("failed", sess.reason or "the Stump refused FireFly's signature")
             if self.auth_quiet:
                 self._save(auth=self.auth_before or "none", auth_detail="")
             else:

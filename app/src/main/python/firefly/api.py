@@ -398,6 +398,7 @@ def stump_view(key, room=None, on_wifi=None):
     sess.auth_timed_out()
     node["auth"] = (c.store.stump_node(key) or {}).get("auth", node.get("auth"))
     node["auth_detail"] = (c.store.stump_node(key) or {}).get("auth_detail", node.get("auth_detail"))
+    node["verify"] = dict(sess.verify)
     if key.startswith("mesh:"):
         # Over LoRa with nothing to carry it: offer this Stump's Wi-Fi entry instead.
         node["reachable"] = c.can_reach(node["address"])
@@ -437,6 +438,19 @@ def stump_command(key, line):
 
 def stump_auth(key):
     return _need().session(key).start_auth()
+
+
+def stump_verify(key, again=False):
+    """Entering a Stump: FireFly proves who it is first (Wi-Fi and LoRa alike), and the
+    screen waits. -> {"state": idle|verifying|ok|not_needed|failed, "detail", "transport"}."""
+    c = _need()
+    key = c.resolve(key)
+    sess = c.session(key)
+    sess.auth_timed_out()
+    v = sess.verify_now(again=_flag(again))
+    v["transport"] = sess.pipe.kind
+    v["key"] = key
+    return _j(v)
 
 
 def stump_dm_thread(key, nick):

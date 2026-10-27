@@ -372,4 +372,13 @@
     <string name="radio_not_confirmed">El RNode no ha confirmado el nuevo canal: mira Radio LoRa en la pestaña Red</string>
     <string name="on_air_confirmed">Al aire, confirmado por el RNode: %1$s</string>
     <string name="not_confirmed">(sin confirmar)</string>
+    <string name="verify_gate_title">Verificándote con %1$s</string>
+    <string name="verify_gate_body">FireFly está demostrando quién eres a este Stump antes de entrar.</string>
+    <string name="verify_gate_wifi">Por Wi-Fi: un segundo o dos. %1$d s</string>
+    <string name="verify_gate_lora">Por LoRa tarda unos 10 s, hasta un minuto y medio. %1$d s</string>
+    <string name="verify_gate_ok">Verificado ✓</string>
+    <string name="verify_gate_failed_help">Puedes entrar de todos modos: puedes leer, pero el Stump puede rechazar lo que escribas hasta que estés verificado.</string>
+    <string name="verify_gate_retry">Reintentar</string>
+    <string name="verify_gate_enter_anyway">Entrar de todos modos</string>
+    <string name="verify_gate_back">Volver</string>
 </resources>
