@@ -399,6 +399,8 @@ def stump_view(key, room=None, on_wifi=None):
     node["auth"] = (c.store.stump_node(key) or {}).get("auth", node.get("auth"))
     node["auth_detail"] = (c.store.stump_node(key) or {}).get("auth_detail", node.get("auth_detail"))
     node["verify"] = dict(sess.verify)
+    lx = node.get("lxmf") or (key.partition(":")[2] if key.startswith("mesh:") else None)
+    node["restarted_at"] = c.restarted_at.get(lx) if lx else None     # its chain and Stumps lists come back
     if key.startswith("mesh:"):
         # Over LoRa with nothing to carry it: offer this Stump's Wi-Fi entry instead.
         node["reachable"] = c.can_reach(node["address"])

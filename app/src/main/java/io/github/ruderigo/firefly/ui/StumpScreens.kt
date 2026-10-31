@@ -239,6 +239,17 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             radio = Engine.obj("stump_radio", key)
         }
     }
+    // It restarted (a new boot id in its beacon, Stump 1.0.0-beta.43): its chain comes back
+    // within seconds, so ask again shortly after, then once more.
+    val restartedAt = view.optDouble("restarted_at").takeIf { !it.isNaN() }
+    LaunchedEffect(key, restartedAt) {
+        if (restartedAt == null || mesh) return@LaunchedEffect
+        for (wait in listOf(5_000L, 20_000L)) {
+            delay(wait)
+            chain = Engine.obj("stump_chain", key)
+            radio = Engine.obj("stump_radio", key)
+        }
+    }
     val auth = view.optString("auth", "none")
     // Into a Stump only once it knows who we are: FireFly verifies itself (Wi-Fi and LoRa) and
     // the room waits behind a popup until it's done, or the user chooses to go in anyway.

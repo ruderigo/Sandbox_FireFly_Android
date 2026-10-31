@@ -43,7 +43,7 @@ class BeaconHandler:
         if info and not beacon_is_own(info[0], announced_identity):
             return              # a beacon naming someone else's LXMF address: forged (Stump 1.0.0-beta.37)
         if info:
-            self.on_stump(*info, beacon_http(app_data))
+            self.on_stump(*info, beacon_http(app_data), boot=beacon_boot(app_data))
 
 
 # Rooms renamed in Stump 1.0.0-beta.4: #lxmf is #lora-mesh (LoRa phones and handhelds
@@ -94,6 +94,24 @@ def beacon_http(app_data):
         return [u for u in extra if isinstance(u, str) and u.startswith("http")][:6] if isinstance(extra, list) else []
     except Exception:
         return []
+
+
+def beacon_caps(app_data):
+    """The beacon's sixth item: the Stump's caps dict ({} when absent or not a dict). Unknown
+    keys are kept and ignored: each Stump release may add some."""
+    try:
+        data = msgpack.unpackb(app_data)
+        c = data[5] if isinstance(data, list) and len(data) > 5 else None
+        return c if isinstance(c, dict) else {}
+    except Exception:
+        return {}
+
+
+def beacon_boot(app_data):
+    """caps["b"] since Stump 1.0.0-beta.43: an id for this boot, new at every restart.
+    None on older Stumps (or anything that isn't a short string)."""
+    b = beacon_caps(app_data).get("b")
+    return b if isinstance(b, str) and 0 < len(b) <= 32 else None
 
 
 def beacon_hash_for(identity):

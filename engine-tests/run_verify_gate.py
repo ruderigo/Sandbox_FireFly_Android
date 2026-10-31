@@ -9,7 +9,9 @@ signature. stump_verify(key) starts it if need be and says where it is:
     the challenge, and is ok on AUTH-OK; entering again doesn't ask again;
   * a refusal, no answer, no radio or an unreachable Wi-Fi Stump: failed, with
     the reason, and Try again starts over;
-  * a Stump without /auth: nothing to prove, the room opens.
+  * a Stump without /auth: nothing to prove, the room opens;
+  * a Stump that restarts (a new boot id in its beacon, Stump 1.0.0-beta.43)
+    is verified again by itself; unknown caps keys are ignored.
 """
 import json, os, sys, tempfile, time
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -100,6 +102,56 @@ sent.clear()
 gate(K, True)
 sess.on_mesh_content("? /auth")
 check("a Stump without /auth: nothing to prove, the room opens", gate(K)["state"] == "not_needed", gate(K))
+
+# A Stump restarts (Stump 1.0.0-beta.43: a new boot id, caps["b"], in its beacon). It forgot
+# who proved who they are: FireFly drops "verified" and, being in use, verifies again quietly.
+import RNS.vendor.umsgpack as mp
+def beacon(boot=None, extra=None):
+    caps = {"m": "hybrid", "rad": True, "zz_future": [1, 2]}       # an unknown key: ignored
+    if boot is not None:
+        caps["b"] = boot
+    caps.update(extra or {})
+    return mp.packb(["stump", "1.0.0-beta.43", "LaBuche", bytes.fromhex(LX), ["http://10.0.0.5"], caps])
+check("the beacon's boot id is read", stump.beacon_boot(beacon("a1b2c3")) == "a1b2c3")
+check("...absent on an older Stump: None, nothing else changes",
+      stump.beacon_boot(beacon()) is None and stump.parse_beacon(beacon())[0] == LX
+      and stump.beacon_http(beacon()) == ["http://10.0.0.5"])
+check("...a five-item beacon (beta.21-42): None",
+      stump.beacon_boot(mp.packb(["stump", "1.0.0-beta.42", "LaBuche", bytes.fromhex(LX), []])) is None)
+check("...caps that aren't a dict, or a b that isn't a string: None",
+      stump.beacon_boot(mp.packb(["stump", "x", "n", bytes.fromhex(LX), [], [1]])) is None
+      and stump.beacon_boot(beacon(12345)) is None)
+
+sent.clear()
+sess.verify = {"state": "idle", "detail": "", "at": 0}
+gate(K)
+sess.on_mesh_content("AUTH-CHALLENGE " + "7b" * 16)
+sess.on_mesh_content("AUTH-OK " + c.identity.hash.hex())
+check("(verified again)", gate(K)["state"] == "ok")
+sent.clear()
+c._on_stump_beacon(LX, "LaBuche", "1.0.0-beta.43", ["http://10.0.0.5"], boot="a1b2c3")
+c._on_stump_beacon(LX, "LaBuche", "1.0.0-beta.43", ["http://10.0.0.5"], boot="a1b2c3")
+check("the same boot id again: nothing happens", sent == [] and gate(K)["state"] == "ok", (sent, gate(K)))
+c._on_stump_beacon(LX, "LaBuche", "1.0.0-beta.43", ["http://10.0.0.5"], boot="d4e5f6")
+check("a new boot id: it restarted, FireFly verifies again by itself",
+      sent == ["/auth"] and sess.verify["state"] == "verifying", (sent, sess.verify))
+check("...not shown 'verified' meanwhile", json.loads(api.stump_view(K))["auth"] != "ok")
+check("...and the view says when it restarted", json.loads(api.stump_view(K))["restarted_at"])
+sess.on_mesh_content("AUTH-CHALLENGE " + "8c" * 16)
+sess.on_mesh_content("AUTH-OK " + c.identity.hash.hex())
+check("...verified again, quietly", gate(K)["state"] == "ok"
+      and not any(l["body"].startswith("AUTH-") for l in json.loads(api.stump_view(K))["lines"]))
+c._on_stump_beacon(LX, "LaBuche", "1.0.0-beta.42", ["http://10.0.0.5"], boot=None)
+check("a beacon without a boot id (downgrade, older relay) changes nothing", gate(K)["state"] == "ok" and len(sent) == 2, sent)
+
+# A Stump restarting that FireFly hasn't entered this run: only "verified" goes, no airtime.
+LX3 = "cf" * 16
+K3 = "mesh:" + LX3
+c.store.upsert_stump_node(K3, "mesh", LX3, name="Racine", last_seen=time.time(), auth="ok")
+c._on_stump_beacon(LX3, "Racine", "1.0.0-beta.43", [], boot="111111")
+c._on_stump_beacon(LX3, "Racine", "1.0.0-beta.43", [], boot="222222")
+check("a Stump not entered restarts: no longer 'verified', and nothing sent",
+      c.store.stump_node(K3)["auth"] == "none" and K3 not in c.sessions, c.store.stump_node(K3).get("auth"))
 
 # no radio
 LX2 = "ce" * 16

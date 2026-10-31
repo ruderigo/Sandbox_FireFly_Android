@@ -8,11 +8,21 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.8** (sandbox, for Stump 1.0.0-beta.38; the stable release is 0.5.0). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.9** (sandbox, for Stump 1.0.0-beta.43; the stable release is 0.5.0). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1-beta.9: a Stump that restarts (Stump 1.0.0-beta.43)
+- The beacon's caps carry `b`, an id for each boot. Caps keys FireFly doesn't
+  know are still ignored; a beacon without `b` (older Stumps) changes nothing.
+- A new `b` means the Stump restarted and forgot who proved who they are:
+  FireFly stops showing it as "verified" and, if you'd entered it this run,
+  verifies again by itself, quietly (no popup, no lines in the room). A
+  Stump you haven't entered is sent nothing.
+- Its chain (/chain.json) is asked again 5 s and 20 s after a restart, as
+  the Stump refills it within seconds.
 
 ### 0.5.1-beta.8: verified before you go in
 - Entering a Stump now waits behind a "Verifying you with <Stump>…" popup

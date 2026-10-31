@@ -78,6 +78,8 @@ class Core:
         self.sessions = {}          # session key -> StumpSession
         self.moved = {}             # an old Wi-Fi key -> the key of the same Stump at its new address
         self.beacon_http = {}       # lxmf hex -> the web addresses its beacon gave (Stump 1.0.0-beta.21+)
+        self.boots = {}             # lxmf hex -> its beacon's boot id, caps["b"] (Stump 1.0.0-beta.43+)
+        self.restarted_at = {}      # lxmf hex -> when its boot id last changed (it restarted)
         self._relocate_lock = threading.Lock()
         self._relocate_tried = {}   # key -> when we last asked where it went
         self.extra_ifaces = []      # AutoInterface / TCP interfaces we attached
@@ -301,8 +303,15 @@ class Core:
 
     _beacon_asked = set()
 
-    def _on_stump_beacon(self, lxmf_hex, name, version, http=None):
+    def _on_stump_beacon(self, lxmf_hex, name, version, http=None, boot=None):
         first = lxmf_hex not in self.stumps
+        if boot:
+            # Another boot id (Stump 1.0.0-beta.43): it restarted, and forgot who proved who
+            # they are. Its sessions drop "verified" and, if in use, verify again.
+            before = self.boots.get(lxmf_hex)
+            self.boots[lxmf_hex] = boot
+            if before and before != boot:
+                self.stump_restarted(lxmf_hex)
         if http:
             self.beacon_http[lxmf_hex] = list(http)
         self.stumps[lxmf_hex] = (name, version)
@@ -310,6 +319,17 @@ class Core:
             threading.Thread(target=self._ask_stump_pn, args=(lxmf_hex,), daemon=True).start()
         self.store.upsert_peer(lxmf_hex, "lxmf", heard=False, stump=name, stump_ver=version)
         self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name, last_seen=time.time())
+
+    def stump_restarted(self, lxmf_hex):
+        """A Stump beaconed a new boot id: it restarted. Over LoRa and Wi-Fi alike."""
+        self.restarted_at[lxmf_hex] = time.time()
+        RNS.log(f"Stump {lxmf_hex[:8]} restarted (new boot id)", RNS.LOG_NOTICE)
+        for key in self.same_stump(mesh_key(lxmf_hex)):
+            sess = self.sessions.get(key)
+            if sess is not None:
+                sess.peer_restarted()
+            elif (self.store.stump_node(key) or {}).get("auth") == "ok":
+                self.store.upsert_stump_node(key, key.partition(":")[0], key.partition(":")[2], auth="none")
 
     def is_stump(self, peer_hex):
         return peer_hex in self.stumps

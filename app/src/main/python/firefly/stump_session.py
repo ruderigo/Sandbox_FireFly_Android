@@ -771,6 +771,17 @@ class StumpSession:
         self.greet(force=True)
         return dict(self.verify)
 
+    def peer_restarted(self):
+        """The Stump restarted (a new boot id in its beacon): it no longer knows we proved who we
+        are. Not "verified" any more; and if we had verified this run (the Stump is in use),
+        verify again now, quietly."""
+        was = self.verify["state"]
+        self.auth = None
+        self._save(auth="none", auth_detail="")
+        self._verify_set("idle")
+        if was == "ok":
+            self.verify_now()
+
     def hello_needed(self):
         """The Stump asks for the greeting (a poll or a send said "hello": "required")."""
         self.hello = "required"
