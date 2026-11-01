@@ -8,7 +8,7 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.9** (sandbox, for Stump 1.0.0-beta.43; the stable release is 0.5.0). Built and field-tested: BLE and USB
+Status: **0.5.1-beta.9** (sandbox, for Stump 1.0.0-beta.46; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
