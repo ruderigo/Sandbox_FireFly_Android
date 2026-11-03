@@ -9,6 +9,14 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
+    <!-- Scan a Stump's QR code (its address, Stump 1.0.0-beta.51): asked only when Scan is
+         tapped; a phone without a camera still installs FireFly (typing the address works) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false"
+        tools:replace="android:required" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"
+        tools:replace="android:required" />
+
     <!-- Bluetooth LE RNodes -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -48,6 +56,11 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.FireFly">
 
+        <!-- The QR scanner: follows the phone's orientation (its default is landscape) -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="android:screenOrientation" />
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"

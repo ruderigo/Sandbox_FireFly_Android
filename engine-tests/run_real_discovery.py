@@ -12,7 +12,7 @@ and checks, with FireFly's engine and its desktop HTTP/UDP transport:
   * the Stump's beacon data (five items) is read by FireFly's beacon parser.
 Skipped (exit 0) when no Stump folder is given or found.
 """
-import json, os, socket, subprocess, sys, tempfile, time, urllib.request
+import json, os, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "app", "src", "main", "python"))
 
@@ -66,6 +66,7 @@ LXMF = node_json.get("lxmf")
 time.sleep(2)
 
 from firefly import discovery, api
+from firefly import stump as stump_mod
 from firefly.stump_session import UrllibHttp
 http = UrllibHttp()
 
@@ -119,6 +120,17 @@ check("the real Stump has FireFly's greeting: 'hello': 'done', under its own nam
 
 check("...through /hello (Stump 1.0.0-beta.32), not the /auth + /nick fallback",
       getattr(core.sessions.get(new_key), "hello_v2", False))
+
+# --- its address page (Stump 1.0.0-beta.51): the QR code holds the plain address
+try:
+    page = opener.open(f"http://{IP}:{PORT}/address", timeout=10).read().decode("utf-8", "replace")
+    check("its /address page (beta.51+) shows its LXMF address", LXMF in page, page[:300])
+    check("...which FireFly's scan reads as is", stump_mod.address_from_text(LXMF) == LXMF)
+    r = json.loads(api.stump_add_address(LXMF))
+    check("...and adding it by that address joins the Stump FireFly already lists, no second row",
+          r.get("key") == "mesh:" + LXMF and sum(1 for x in json.loads(api.stump_nodes()) if x.get("lxmf") == LXMF) == 1, r)
+except urllib.error.HTTPError as e:
+    print("SKIP /address (a Stump before beta.51):", e.code)
 
 # --- its beacon, as the Stump builds it
 sys.path[:0] = [os.path.join(STUMP, "pc", "pc_compat"), os.path.join(STUMP, "final_firmware")]

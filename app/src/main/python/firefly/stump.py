@@ -114,6 +114,18 @@ def beacon_boot(app_data):
     return b if isinstance(b, str) and 0 < len(b) <= 32 else None
 
 
+_ADDRESS_TEXT = re.compile(r"^(?:[a-z][a-z0-9+.-]*://)?<?([0-9a-f]{32})>?(?:[:/?#].*)?$")
+
+
+def address_from_text(text):
+    """An LXMF address out of what a QR code or a paste gives: the plain 32 hex characters (a
+    Stump's /address page, Stump 1.0.0-beta.51), `<…>`, or a link like `lxmf://<address>`
+    (anything after the address is ignored). -> 32 lowercase hex, or None."""
+    t = "".join(str(text or "").split()).lower()
+    m = _ADDRESS_TEXT.match(t)
+    return m.group(1) if m else None
+
+
 def beacon_hash_for(identity):
     """Destination hash of a peer's Stump beacon. request_path() on it to ask 'are you a Stump?'."""
     return RNS.Destination.hash(identity, BEACON_APP, BEACON_ASPECT)

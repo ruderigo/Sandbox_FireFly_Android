@@ -381,4 +381,15 @@
     <string name="verify_gate_retry">Try again</string>
     <string name="verify_gate_enter_anyway">Go in anyway</string>
     <string name="verify_gate_back">Back</string>
+    <string name="scan_qr">Scan QR</string>
+    <string name="scan_prompt">Point at the QR code: a Stump\'s home page › Its address</string>
+    <string name="scan_none">No code read. You can type the address instead.</string>
+    <string name="scan_not_address">That code isn\'t an LXMF address: %1$s</string>
+    <string name="add_stump_title">Add a Stump by its address</string>
+    <string name="add_stump_help">On the Stump\'s home page, Its address shows a QR code: scan it to add the Stump now, without waiting for it to announce itself.</string>
+    <string name="add_stump_or_type">or type its 32 characters:</string>
+    <string name="add_stump_add">Add</string>
+    <string name="add_stump_adding">Adding…</string>
+    <string name="add_stump_added">%1$s added to your Stumps. FireFly is asking for it; its name shows once it answers.</string>
+    <string name="add_stump_known">%1$s is already in your Stumps. FireFly is asking for it again.</string>
 </resources>

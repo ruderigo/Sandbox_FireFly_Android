@@ -331,6 +331,35 @@ class Core:
             elif (self.store.stump_node(key) or {}).get("auth") == "ok":
                 self.store.upsert_stump_node(key, key.partition(":")[0], key.partition(":")[2], auth="none")
 
+    def add_stump_address(self, text):
+        """A Stump added by its address (its QR code or typed, Stump 1.0.0-beta.51's /address):
+        into the Stumps list now, without waiting for it to announce itself. Then the usual way
+        in: a path request brings its announce, which asks for its beacon (its name, its Wi-Fi
+        addresses), and opening it verifies as for any Stump. -> {"key", "new"}."""
+        h = stump.address_from_text(text)
+        if h is None:
+            raise ValueError("not an LXMF address (32 characters, 0-9 and a-f)")
+        if h in self.blocked:
+            raise ValueError("this address is blocked: unblock it in Settings first")
+        if h == self.local.hash.hex():
+            raise ValueError("that's FireFly's own address")
+        key = mesh_key(h)
+        node = self.store.stump_node(key)
+        if node is None:
+            self.store.upsert_stump_node(key, "mesh", h, name=self.stumps.get(h, (f"<{h[:8]}>",))[0])
+        elif not node.get("active", 1):
+            self.store.upsert_stump_node(key, "mesh", h, active=1)       # hidden before: back in the list
+        self._beacon_asked.discard(h)            # ask it again, even if asked (and unanswered) before
+        try:
+            RNS.Transport.request_path(bytes.fromhex(h))
+            ident = RNS.Identity.recall(bytes.fromhex(h))
+            if ident is not None and h not in self.stumps:
+                self._beacon_asked.add(h)
+                RNS.Transport.request_path(stump.beacon_hash_for(ident))
+        except Exception as e:
+            RNS.log(f"Stump {h[:8]}: path request failed: {e}", RNS.LOG_WARNING)
+        return {"key": key, "new": node is None}
+
     def is_stump(self, peer_hex):
         return peer_hex in self.stumps
 

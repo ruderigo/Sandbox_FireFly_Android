@@ -38,6 +38,14 @@ fun ChatsScreen(go: (Route) -> Unit) {
     var addr by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val ctx = LocalContext.current
+    // Someone's address from a QR code (a Stump's /address page, another app's): as if typed.
+    val scanQr = rememberQrScan { contents ->
+        if (contents == null) { error = ctx.getString(R.string.scan_none); return@rememberQrScan }
+        val clean = Engine.call("address_from_text", contents)
+        if (clean.length == 32) {
+            Engine.fire("add_contact", clean); adding = false; addr = ""; error = null; go(Route.Chat(clean))
+        } else error = ctx.getString(R.string.scan_not_address, contents.trim().take(40))
+    }
     val talking = convs.map { it.optString("peer") }.toSet()
     var deleting by remember { mutableStateOf<JSONObject?>(null) }
     var forgetting by remember { mutableStateOf<JSONObject?>(null) }
@@ -84,6 +92,8 @@ fun ChatsScreen(go: (Route) -> Unit) {
                 Field(addr, { addr = it; error = null }, Modifier.fillMaxWidth(), hint = stringResource(R.string.address_hint), mono = true)
                 error?.let { Text(it, style = MaterialTheme.typography.bodySmall.copy(color = Amber.Error)) }
                 Row(Modifier.padding(vertical = 8.dp)) {
+                    Button(stringResource(R.string.scan_qr), primary = false) { scanQr() }
+                    Spacer(Modifier.width(8.dp))
                     Button(stringResource(R.string.open_chat)) {
                         val clean = addr.trim().lowercase().removePrefix("<").removeSuffix(">")
                         if (clean.length == 32 && clean.all { it in "0123456789abcdef" }) {

@@ -29,8 +29,8 @@ android {
     applicationId = "io.github.ruderigo.firefly"
     minSdk = 26
     targetSdk = 36
-    versionCode = 46
-    versionName = "0.5.1-beta.9"
+    versionCode = 51
+    versionName = "0.5.2-beta.1"
     ndk { abiFilters += abis }
   }
 
@@ -98,5 +98,6 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.usb.serial)
+  implementation(libs.zxing.embedded)     // scan a Stump's QR code (Apache-2.0, offline, no Google services)
   testImplementation(libs.junit)
 }

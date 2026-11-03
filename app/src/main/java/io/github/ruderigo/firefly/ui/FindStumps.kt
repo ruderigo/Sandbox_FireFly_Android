@@ -54,6 +54,35 @@ fun FindStumpsScreen(back: () -> Unit, go: (Route) -> Unit) {
     var asking by remember { mutableStateOf<JSONObject?>(null) }       // a secured hotspot: its password
     var notStump by remember { mutableStateOf<String?>(null) }
 
+    // A Stump by its address (its QR code, Stump 1.0.0-beta.51, or typed): into the Stumps list
+    // at once, then the usual way in (its announce, its beacon, verification on opening it).
+    var typed by remember { mutableStateOf("") }
+    var addError by remember { mutableStateOf<String?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    fun addStump(text: String, scanned: Boolean) {
+        if (adding) return
+        adding = true; addError = null
+        scope.launch {
+            val r = Engine.obj("stump_add_address", text)
+            adding = false
+            val err = r.optString("error").takeIf { it.isNotBlank() && it != "null" }
+            if (err != null) {
+                addError = if (scanned) ctx.getString(R.string.scan_not_address, text.trim().take(40)) else err
+                if (scanned) typed = ""
+                return@launch
+            }
+            val short = "<" + r.optString("key").substringAfter(":").take(8) + ">"
+            android.widget.Toast.makeText(ctx, ctx.getString(
+                if (r.optBoolean("new")) R.string.add_stump_added else R.string.add_stump_known, short),
+                android.widget.Toast.LENGTH_LONG).show()
+            typed = ""
+            back()                      // to the Stumps list, where it now is
+        }
+    }
+    val scanQr = rememberQrScan { contents ->
+        if (contents == null) addError = ctx.getString(R.string.scan_none) else addStump(contents, scanned = true)
+    }
+
     // Open a Stump at an address: its Wi-Fi session, then its screen.
     fun openStump(base: String) {
         scope.launch {
@@ -131,6 +160,27 @@ fun FindStumpsScreen(back: () -> Unit, go: (Route) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.find_stumps), stringResource(R.string.find_stumps_sub), back)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+
+            // ---------------------------------------------------------------- by its address
+            item {
+                Section(stringResource(R.string.add_stump_title)) {
+                    Text(stringResource(R.string.add_stump_help), style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(stringResource(R.string.scan_qr), enabled = !adding) { scanQr() }
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.add_stump_or_type), style = MaterialTheme.typography.labelMedium)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Field(typed, { typed = it; addError = null }, Modifier.fillMaxWidth(),
+                        hint = stringResource(R.string.address_hint), mono = true,
+                        onDone = { if (typed.isNotBlank()) addStump(typed, scanned = false) })
+                    Spacer(Modifier.height(8.dp))
+                    Button(stringResource(if (adding) R.string.add_stump_adding else R.string.add_stump_add), primary = false,
+                        enabled = typed.isNotBlank() && !adding) { addStump(typed, scanned = false) }
+                    addError?.let { Note(it, error = true) }
+                }
+            }
 
             // ---------------------------------------------------------------- here
             item {

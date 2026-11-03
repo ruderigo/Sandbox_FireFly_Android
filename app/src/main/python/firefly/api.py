@@ -438,6 +438,21 @@ def stump_command(key, line):
     _need().session(key).command(line)
 
 
+def stump_add_address(text):
+    """A Stump by its address (scanned from its QR code, or typed): into the Stumps list.
+    -> {"key", "new"} or {"error"}."""
+    try:
+        return _j(_need().add_stump_address(text))
+    except ValueError as e:
+        return _j({"error": str(e)})
+
+
+def address_from_text(text):
+    """The LXMF address in a scanned code or a paste, or "" (for Add address in Chats)."""
+    from . import stump
+    return stump.address_from_text(text) or ""
+
+
 def stump_auth(key):
     return _need().session(key).start_auth()
 

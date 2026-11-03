@@ -8,11 +8,33 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.1-beta.9** (sandbox, for Stump 1.0.0-beta.46; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.5.2-beta.1** (sandbox, for Stump 1.0.0-beta.51; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.2-beta.1: add a Stump by its QR code (Stump 1.0.0-beta.51)
+- **Find Stumps › Add a Stump by its address:** **Scan QR** reads the code
+  on a Stump's home page (*Its address*, `/address`), or type its 32
+  characters. The Stump joins your Stumps list at once, named by its short
+  address (`<9b5c4744>`), without waiting for it to announce itself; then
+  it goes the same way as a Stump heard by itself: FireFly asks the network
+  for it, its answer brings its beacon (its real name, its Wi-Fi side), and
+  opening it verifies you as usual. Adding one already listed asks for it
+  again; a hidden one comes back.
+- **Chats › Add address** has Scan QR too, for anyone's LXMF address.
+- What's read: the plain address, `<…>`, or a link such as `lxmf://…`;
+  anything else is refused with what the code said.
+- The scanner is ZXing (Apache-2.0): offline, no Google services. The camera
+  is asked for only when Scan is tapped; refused, typing still works. A
+  phone without a camera still installs FireFly.
+- **Build numbers follow the Stump release:** build 51, for Stump
+  1.0.0-beta.51.
+- Checked against Stump beta.47-51: a DM to a Stump itself now comes back
+  as a DM from that Stump (beta.47), which FireFly files in that Stump's
+  conversation; nothing else changes for the app.
+- Tests: run_scan_add; run_real_discovery reads a real Stump's `/address`.
 
 ### 0.5.1-beta.9: a Stump that restarts (Stump 1.0.0-beta.43)
 - The beacon's caps carry `b`, an id for each boot. Caps keys FireFly doesn't
