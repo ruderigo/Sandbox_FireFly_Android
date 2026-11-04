@@ -69,6 +69,27 @@ def _get(http, url, timeout_ms):
     return status, data, ms
 
 
+def hello_proof(http, base, lxmf_hex, timeout_ms=1500):
+    """Is the Stump answering at `base` the one with this LXMF address, by its own signature?
+    GET /hello (Stump 1.0.0-beta.32+) hands out a nonce, the Stump's address and public key,
+    and its signature over nonce + address: nothing is registered, FireFly only reads it.
+    -> True only for a valid signature by the key whose lxmf.delivery address is `lxmf_hex`."""
+    import RNS
+    status, d, _ = _get(http, base.rstrip("/") + "/hello", timeout_ms)
+    if status != 200 or not isinstance(d, dict):
+        return False
+    nonce, lx = str(d.get("nonce") or ""), str(d.get("lxmf") or "").lower()
+    if not nonce or lx != lxmf_hex or not d.get("pub") or not d.get("sig"):
+        return False
+    try:
+        them = RNS.Identity(create_keys=False)
+        them.load_public_key(bytes.fromhex(d["pub"]))
+        return bool(them.validate(bytes.fromhex(d["sig"]), (nonce + lx).encode("ascii"))) and \
+            RNS.Destination.hash(them, "lxmf", "delivery").hex() == lxmf_hex
+    except Exception:
+        return False
+
+
 def _hash(v):
     return v.lower() if isinstance(v, str) and len(v) == 32 and all(c in "0123456789abcdefABCDEF" for c in v) else None
 

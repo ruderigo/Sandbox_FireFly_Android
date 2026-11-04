@@ -39,12 +39,11 @@ fun ChatsScreen(go: (Route) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     val ctx = LocalContext.current
     // Someone's address from a QR code (a Stump's /address page, another app's): as if typed.
+    // A Stump's goes to the Stumps list, a person's opens a chat (AddressIntake decides, or asks).
     val scanQr = rememberQrScan { contents ->
         if (contents == null) { error = ctx.getString(R.string.scan_none); return@rememberQrScan }
-        val clean = Engine.call("address_from_text", contents)
-        if (clean.length == 32) {
-            Engine.fire("add_contact", clean); adding = false; addr = ""; error = null; go(Route.Chat(clean))
-        } else error = ctx.getString(R.string.scan_not_address, contents.trim().take(40))
+        adding = false; addr = ""; error = null
+        AddressIntake.submit(contents)
     }
     val talking = convs.map { it.optString("peer") }.toSet()
     var deleting by remember { mutableStateOf<JSONObject?>(null) }
@@ -94,11 +93,10 @@ fun ChatsScreen(go: (Route) -> Unit) {
                 Row(Modifier.padding(vertical = 8.dp)) {
                     Button(stringResource(R.string.scan_qr), primary = false) { scanQr() }
                     Spacer(Modifier.width(8.dp))
-                    Button(stringResource(R.string.open_chat)) {
-                        val clean = addr.trim().lowercase().removePrefix("<").removeSuffix(">")
-                        if (clean.length == 32 && clean.all { it in "0123456789abcdef" }) {
-                            Engine.fire("add_contact", clean); adding = false; addr = ""; go(Route.Chat(clean))
-                        } else error = "32 hex"
+                    Button(stringResource(R.string.open_chat), enabled = addr.isNotBlank()) {
+                        val text = addr
+                        adding = false; addr = ""; error = null
+                        AddressIntake.submit(text)
                     }
                 }
             }
@@ -141,8 +139,10 @@ fun hopsLabel(p: JSONObject): String = if (p.isNull("hops")) "" else
     stringResource(R.string.hops, p.optInt("hops"))
 
 @Composable
-fun ConversationScreen(peer: String, back: () -> Unit) {
+fun ConversationScreen(peer: String, back: () -> Unit, go: (Route) -> Unit = {}) {
     val info = engineData(JSONObject(), peer) { Engine.obj("peer", peer) }
+    // This address turned out to be a Stump's (its beacon came in): it belongs in Stumps.
+    val stumpKey = engineData("", peer) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Engine.call("peer_stump", peer) } }
     val msgs = engineData(emptyList<JSONObject>(), peer) { Engine.arr("messages", peer).objects() }
     val ctx = LocalContext.current
     LaunchedEffect(msgs.size) {
@@ -172,6 +172,12 @@ fun ConversationScreen(peer: String, back: () -> Unit) {
             listOfNotNull(shortHash(peer), if (info.isNull("hops")) null else hopsLabel(info)).joinToString("  "), back) {
             OverflowMenu(listOf(stringResource(R.string.delete_conv_menu) to { confirmDelete = true },
                 stringResource(R.string.block) to { confirmBlock = true }))
+        }
+        if (stumpKey.startsWith("mesh:")) Row(Modifier.fillMaxWidth().background(Amber.Sidebar)
+            .padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.chat_is_stump), style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            Button(stringResource(R.string.chat_open_stump)) { go(Route.Node(stumpKey)) }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(vertical = 8.dp)) {
             items(msgs, key = { it.optLong("id") }) { m -> MessageRow(m) }

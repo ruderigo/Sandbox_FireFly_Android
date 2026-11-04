@@ -121,9 +121,55 @@ def address_from_text(text):
     """An LXMF address out of what a QR code or a paste gives: the plain 32 hex characters (a
     Stump's /address page, Stump 1.0.0-beta.51), `<…>`, or a link like `lxmf://<address>`
     (anything after the address is ignored). -> 32 lowercase hex, or None."""
-    t = "".join(str(text or "").split()).lower()
-    m = _ADDRESS_TEXT.match(t)
-    return m.group(1) if m else None
+    a = parse_address_link(text)
+    return a["address"] if a else None
+
+
+def parse_address_link(text):
+    """What a scanned code, a paste or a tapped link says. -> None, or {"address": 32 hex,
+    "link": it was a link (lxmf://…), "stump": the name given by stump= (None: not said to be
+    a Stump), "key": the 64-byte public key given by key= (None: none), "key_bad": key= was
+    there but isn't 64 bytes of base64url}.
+    Stump 1.0.0-beta.52: lxmf://<address>?stump=<name, %-encoded UTF-8>&key=<base64url>."""
+    import base64
+    from urllib.parse import parse_qs, unquote
+    raw = "".join(str(text or "").split())
+    m = _ADDRESS_TEXT.match(raw.lower())
+    if not m:
+        return None
+    out = {"address": m.group(1), "link": "://" in raw, "stump": None, "key": None, "key_bad": False}
+    q = raw.split("?", 1)[1].split("#", 1)[0] if "?" in raw else ""
+    if q:
+        try:
+            params = parse_qs(q, keep_blank_values=True)
+        except Exception:
+            params = {}
+        if "stump" in params:
+            name = unquote(params["stump"][0]).strip()
+            out["stump"] = "".join(ch for ch in name if ch.isprintable())[:40]
+        if "key" in params:
+            k = params["key"][0]
+            try:
+                key = base64.urlsafe_b64decode(k + "=" * (-len(k) % 4))
+            except Exception:
+                key = b""
+            if len(key) == 64:
+                out["key"] = key
+            else:
+                out["key_bad"] = True
+    return out
+
+
+def identity_for(address_hex, key):
+    """The public key a link gives, checked against its address (Stump 1.0.0-beta.52: anyone
+    can print a QR code). -> an RNS.Identity whose lxmf.delivery address is `address_hex`,
+    or None when it doesn't match (drop the link)."""
+    try:
+        ident = RNS.Identity(create_keys=False)
+        ident.load_public_key(bytes(key))
+        return ident if RNS.Destination.hash(ident, "lxmf", "delivery").hex() == address_hex else None
+    except Exception:
+        return None
 
 
 def beacon_hash_for(identity):

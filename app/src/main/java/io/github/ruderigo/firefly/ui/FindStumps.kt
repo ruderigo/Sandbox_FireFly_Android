@@ -58,26 +58,11 @@ fun FindStumpsScreen(back: () -> Unit, go: (Route) -> Unit) {
     // at once, then the usual way in (its announce, its beacon, verification on opening it).
     var typed by remember { mutableStateOf("") }
     var addError by remember { mutableStateOf<String?>(null) }
-    var adding by remember { mutableStateOf(false) }
+    val adding = AddressIntake.pending.collectAsState().value != null
     fun addStump(text: String, scanned: Boolean) {
-        if (adding) return
-        adding = true; addError = null
-        scope.launch {
-            val r = Engine.obj("stump_add_address", text)
-            adding = false
-            val err = r.optString("error").takeIf { it.isNotBlank() && it != "null" }
-            if (err != null) {
-                addError = if (scanned) ctx.getString(R.string.scan_not_address, text.trim().take(40)) else err
-                if (scanned) typed = ""
-                return@launch
-            }
-            val short = "<" + r.optString("key").substringAfter(":").take(8) + ">"
-            android.widget.Toast.makeText(ctx, ctx.getString(
-                if (r.optBoolean("new")) R.string.add_stump_added else R.string.add_stump_known, short),
-                android.widget.Toast.LENGTH_LONG).show()
-            typed = ""
-            back()                      // to the Stumps list, where it now is
-        }
+        addError = null
+        if (scanned) typed = ""
+        AddressIntake.submit(text, prefer = "stump")      // here, an address that can't be told is a Stump's
     }
     val scanQr = rememberQrScan { contents ->
         if (contents == null) addError = ctx.getString(R.string.scan_none) else addStump(contents, scanned = true)

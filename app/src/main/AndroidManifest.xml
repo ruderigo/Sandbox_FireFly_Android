@@ -70,6 +70,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- lxmf:// links: "Open in FireFly" on a Stump's address page (Stump 1.0.0-beta.52),
+                 or another app's address link. Android asks which app when several take them. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lxmf" />
+            </intent-filter>
             <!-- Plugging in an RNode offers to open FireFly (and grants USB access). -->
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />

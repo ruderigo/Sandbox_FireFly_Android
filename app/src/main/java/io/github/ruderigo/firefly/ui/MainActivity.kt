@@ -65,9 +65,16 @@ class MainActivity : ComponentActivity() {
         if (!routeFrom(intent)) Engine.searchRadio()      // not a notification: an RNode was plugged in
     }
 
-    /** A notification says which conversation to open. */
+    /** A notification says which conversation to open; an lxmf:// link (a Stump's "Open in
+     *  FireFly", Stump 1.0.0-beta.52, or another app's) is an address to add. */
     private fun routeFrom(intent: Intent?): Boolean {
         if (intent == null) return false
+        val link = intent.data?.takeIf { intent.action == Intent.ACTION_VIEW && it.scheme.equals("lxmf", ignoreCase = true) }
+        if (link != null) {
+            AddressIntake.submit(link.toString())
+            intent.data = null                  // not again on rotation or return
+            return true
+        }
         val route: Route? = when (intent.getStringExtra(EXTRA_OPEN)) {
             "chat" -> intent.getStringExtra(EXTRA_PEER)?.let { Route.Chat(it) }
             "dm" -> {
@@ -133,11 +140,15 @@ fun App() {
             }
     }
     Box(Modifier.fillMaxSize().background(Amber.Background)) {
+        // An address scanned, typed or tapped: to the Stumps list, or to a chat.
+        if (state is Engine.State.Running) AddressHandler(
+            onStump = { stack.clear(); stack.add(Route.Home(1)) },
+            onPerson = { peer -> stack.clear(); stack.add(Route.Home(0)); stack.add(Route.Chat(peer)) })
         when (val s = state) {
             is Engine.State.Failed -> Empty(stringResource(R.string.engine_failed, s.error))
             is Engine.State.Running -> when (val r = stack.last()) {
                 is Route.Home -> Home(r.tab, { stack[stack.lastIndex] = Route.Home(it) }, go)
-                is Route.Chat -> ConversationScreen(r.peer, back)
+                is Route.Chat -> ConversationScreen(r.peer, back, go)
                 is Route.Node -> NodeScreen(r.key, back, go)
                 is Route.Dm -> DmScreen(r.key, r.nick, back)
                 Route.Pair -> PairScreen(back)

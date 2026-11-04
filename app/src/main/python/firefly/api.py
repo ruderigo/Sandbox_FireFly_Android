@@ -13,6 +13,7 @@ import time
 from .core import CODEC2_FRAMES, Core, single_packet_size
 from .audio import PLAYABLE, valid_voice
 from . import stump
+from .stump_session import mesh_key
 
 _core = None
 _lock = threading.Lock()
@@ -445,6 +446,31 @@ def stump_add_address(text):
         return _j(_need().add_stump_address(text))
     except ValueError as e:
         return _j({"error": str(e)})
+
+
+def address_check(text):
+    """A scanned code, a typed address or a tapped lxmf:// link: the Stumps list or Chats?
+    About a second at most (the Wi-Fi check). -> see Core.address_check."""
+    return _j(_need().address_check(text))
+
+
+def address_add(text, kind):
+    """Add it where address_check said (or the user chose): kind "stump" or "person"."""
+    try:
+        return _j(_need().address_add(text, str(kind)))
+    except ValueError as e:
+        return _j({"error": str(e)})
+
+
+def peer_stump(peer_hex):
+    """An open chat whose address turns out to be a Stump's: its Stumps entry ("" if not)."""
+    c = _need()
+    h = str(peer_hex).lower()
+    if c.known_stump_name(h) is None:
+        return ""
+    if c.store.stump_node(mesh_key(h)) is None:
+        c.add_stump_address(h)
+    return mesh_key(h)
 
 
 def address_from_text(text):

@@ -331,7 +331,97 @@ class Core:
             elif (self.store.stump_node(key) or {}).get("auth") == "ok":
                 self.store.upsert_stump_node(key, key.partition(":")[0], key.partition(":")[2], auth="none")
 
-    def add_stump_address(self, text):
+    # ---------------------------------------------------------------- an address scanned or typed
+    def address_check(self, text):
+        """Where does this address go, the Stumps list or Chats? Decided at once when it can be
+        (Oct-Nov 2026, with the Stump team): 1. the code says so (Stump 1.0.0-beta.52's link,
+        stump= with a key that matches the address), 2. a Stump FireFly already knows, 3. a
+        Stump on this Wi-Fi proving it's that one (STUMP? then a signed GET /hello, about a
+        second), else 4. the user is asked ("ask", with a suggestion: Stump for the bare
+        address a Stump's page shows, person for another app's link).
+        -> {"kind": stump|person|ask|bad, "address", "name", "how", "suggest", "reachable", "error"}"""
+        a = stump.parse_address_link(text)
+        if a is None:
+            return {"kind": "bad", "error": "not an LXMF address (32 characters, 0-9 and a-f)"}
+        h = a["address"]
+        if a["key_bad"] or (a["key"] is not None and stump.identity_for(h, a["key"]) is None):
+            return {"kind": "bad", "address": h,
+                    "error": "not trusted: the code's key doesn't match its address"}
+        if h == self.local.hash.hex():
+            return {"kind": "bad", "address": h, "error": "that's FireFly's own address"}
+        if h in self.blocked:
+            return {"kind": "bad", "address": h, "error": "this address is blocked: unblock it in Settings first"}
+        out = {"address": h, "reachable": a["key"] is not None or self._identity_known(h)}
+        if a["stump"] is not None:
+            return {**out, "kind": "stump", "how": "link", "name": a["stump"] or None}
+        name = self.known_stump_name(h)
+        if name is not None:
+            return {**out, "kind": "stump", "how": "known", "name": name or None}
+        card = self._stump_on_wifi(h)
+        if card is not None:
+            return {**out, "kind": "stump", "how": "wifi", "name": card.get("name") or None}
+        return {**out, "kind": "ask", "suggest": "person" if a["link"] else "stump"}
+
+    def known_stump_name(self, h):
+        """A Stump FireFly already knows by this LXMF address (its beacon, a LoRa entry, a Wi-Fi
+        entry whose poll gave it): its name ("" when it has none yet), else None."""
+        if h in self.stumps:
+            return self.stumps[h][0] or ""
+        node = self.store.stump_node(mesh_key(h))
+        if node is not None:
+            return node.get("name") or ""
+        for n in self.store.stump_nodes():
+            if n["transport"] == "wifi" and (n.get("lxmf") or "") == h:
+                return n.get("name") or ""
+        peer = self.store.peer(h) or {}
+        return peer.get("stump") or None
+
+    def _identity_known(self, h):
+        try:
+            return RNS.Identity.recall(bytes.fromhex(h)) is not None
+        except Exception:
+            return False
+
+    def _stump_on_wifi(self, h):
+        """A Stump on this Wi-Fi with this address, proven by its own signature (/hello). -> its
+        card or None. About a second; nothing at all off Wi-Fi."""
+        from . import discovery
+        try:
+            for c in discovery.ask(self.http, wait_ms=900):
+                if c.get("lxmf") == h and c.get("base") and discovery.hello_proof(self.http, c["base"], h):
+                    return c
+        except Exception as e:
+            RNS.log(f"Wi-Fi check for {h[:8]} failed: {e}", RNS.LOG_DEBUG)
+        return None
+
+    def address_add(self, text, kind):
+        """Add what address_check said, or what the user chose for "ask": "stump" -> the Stumps
+        list (the usual way in from there: its announce, its beacon, verifying on opening it);
+        "person" -> a contact, for Chats. A key the link gives (checked) is handed to Reticulum
+        first: the address can then be written to at once, before any announce.
+        -> {"kind", "key" (Stumps) or "peer" (Chats), "new", "reachable"}"""
+        a = stump.parse_address_link(text)
+        if a is None:
+            raise ValueError("not an LXMF address (32 characters, 0-9 and a-f)")
+        h = a["address"]
+        ident = None
+        if a["key"] is not None:
+            ident = stump.identity_for(h, a["key"])
+            if ident is None:
+                raise ValueError("not trusted: the code's key doesn't match its address")
+            if not self._identity_known(h):
+                RNS.Identity.remember(None, bytes.fromhex(h), ident.get_public_key(), None)
+        if kind == "stump":
+            r = self.add_stump_address(h, name=a["stump"] or None)
+            r["kind"] = "stump"
+        elif kind == "person":
+            r = {"kind": "person", "peer": self.add_contact(h), "new": self.store.peer(h) is None}
+        else:
+            raise ValueError("a Stump or a person?")
+        r["reachable"] = self._identity_known(h)
+        return r
+
+    def add_stump_address(self, text, name=None):
         """A Stump added by its address (its QR code or typed, Stump 1.0.0-beta.51's /address):
         into the Stumps list now, without waiting for it to announce itself. Then the usual way
         in: a path request brings its announce, which asks for its beacon (its name, its Wi-Fi
@@ -345,10 +435,16 @@ class Core:
             raise ValueError("that's FireFly's own address")
         key = mesh_key(h)
         node = self.store.stump_node(key)
+        heard_name = self.stumps.get(h, (None,))[0]          # its beacon's (signed) has the last word
         if node is None:
-            self.store.upsert_stump_node(key, "mesh", h, name=self.stumps.get(h, (f"<{h[:8]}>",))[0])
-        elif not node.get("active", 1):
-            self.store.upsert_stump_node(key, "mesh", h, active=1)       # hidden before: back in the list
+            self.store.upsert_stump_node(key, "mesh", h, name=heard_name or name or f"<{h[:8]}>")
+        else:
+            if not node.get("active", 1):
+                self.store.upsert_stump_node(key, "mesh", h, active=1)   # hidden before: back in the list
+            if name and not heard_name and str(node.get("name") or "").startswith("<"):
+                self.store.upsert_stump_node(key, "mesh", h, name=name)
+        # Not a person to chat with: out of Chats (its beacon would do the same, later).
+        self.store.upsert_peer(h, "lxmf", heard=False, stump=heard_name or name or f"<{h[:8]}>")
         self._beacon_asked.discard(h)            # ask it again, even if asked (and unanswered) before
         try:
             RNS.Transport.request_path(bytes.fromhex(h))

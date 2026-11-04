@@ -129,6 +129,15 @@ try:
     r = json.loads(api.stump_add_address(LXMF))
     check("...and adding it by that address joins the Stump FireFly already lists, no second row",
           r.get("key") == "mesh:" + LXMF and sum(1 for x in json.loads(api.stump_nodes()) if x.get("lxmf") == LXMF) == 1, r)
+    import html as _html, re as _re
+    m = _re.search(r'lxmf://[0-9a-f]{32}\?[^"\'<>\s]+', _html.unescape(page))
+    if m:                                            # Stump 1.0.0-beta.52+: the link
+        r = json.loads(api.address_check(m.group(0)))
+        check("...its link (beta.52+): a Stump at once, by its own word, its key checked", r.get("kind") == "stump"
+              and r.get("how") == "link" and r.get("name") == "macOS" and r.get("reachable"), (m.group(0)[:80], r))
+        r = json.loads(api.address_add(m.group(0), "stump"))
+        check("...added: its key with Reticulum, still one row", r.get("reachable") and sum(
+              1 for x in json.loads(api.stump_nodes()) if x.get("lxmf") == LXMF) == 1, r)
 except urllib.error.HTTPError as e:
     print("SKIP /address (a Stump before beta.51):", e.code)
 

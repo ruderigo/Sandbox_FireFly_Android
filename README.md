@@ -8,11 +8,37 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.2-beta.1** (sandbox, for Stump 1.0.0-beta.51; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.5.2-beta.2** (sandbox, for Stump 1.0.0-beta.52; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.2-beta.2: a Stump's QR code says it's a Stump (Stump 1.0.0-beta.52)
+- The QR code on a Stump's address page is now a link,
+  `lxmf://<address>?stump=<name>&key=<public key>` (asked by FireFly).
+  FireFly checks the key against the address first (a code whose key isn't
+  its address's is refused: "not trusted"), then files the Stump under its
+  name at once and hands its key to Reticulum: it can be written to before
+  any announce. Its beacon (signed) still has the last word on the name.
+- **Open in FireFly:** FireFly opens `lxmf://` links, so the button on a
+  Stump's page adds it the same way (Android asks which app if another one
+  takes these links too).
+- **Every address goes to the right place, decided at once:** a scan or a
+  typed address, in Find Stumps or in Chats, and a tapped link are checked
+  in this order: the link says it's a Stump; a Stump FireFly already
+  knows; a Stump on this Wi-Fi proving it's that one (STUMP?, then its
+  signed `GET /hello`, about a second; FireFly only reads it); otherwise
+  one tap, "A Stump or a person?" (Stump suggested for the bare address
+  beta.51 Stumps show, person for another app's link; in Find Stumps it's
+  taken as a Stump without asking). A Stump goes to the Stumps list, never
+  into a plain chat; a person opens a chat.
+- A chat whose address later beacons as a Stump says so, with **Open in
+  Stumps**.
+- Build 52, for Stump 1.0.0-beta.52.
+- Tests: run_address_link (the link, the key check, a forged key, the four
+  steps, a forged /hello, the Chats side); run_real_discovery reads a real
+  beta.52 Stump's link and adds it.
 
 ### 0.5.2-beta.1: add a Stump by its QR code (Stump 1.0.0-beta.51)
 - **Find Stumps › Add a Stump by its address:** **Scan QR** reads the code

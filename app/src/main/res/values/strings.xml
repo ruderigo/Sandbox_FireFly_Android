@@ -392,4 +392,13 @@
     <string name="add_stump_adding">Adding…</string>
     <string name="add_stump_added">%1$s added to your Stumps. FireFly is asking for it; its name shows once it answers.</string>
     <string name="add_stump_known">%1$s is already in your Stumps. FireFly is asking for it again.</string>
+    <string name="address_checking">Checking the address…</string>
+    <string name="address_ask_title">A Stump or a person?</string>
+    <string name="address_ask_body">FireFly can\'t tell yet whether %1$s is a Stump or a person. A Stump goes to your Stumps, a person to Chats.</string>
+    <string name="address_is_stump">Stump</string>
+    <string name="address_is_person">Person</string>
+    <string name="address_refused_title">Not added</string>
+    <string name="address_ok">OK</string>
+    <string name="chat_is_stump">This address is a Stump: its rooms and messages are in Stumps.</string>
+    <string name="chat_open_stump">Open in Stumps</string>
 </resources>
