@@ -39,6 +39,7 @@ fun AddressHandler(onStump: (String) -> Unit, onPerson: (String) -> Unit) {
     var asking by remember { mutableStateOf<JSONObject?>(null) }       // the check said "ask"
     var refused by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf<Pair<String, String>?>(null) }   // (text, kind)
+    var reading by remember { mutableStateOf<String?>(null) }                // an lxm:// paper message
 
     LaunchedEffect(req) {
         val r = req ?: return@LaunchedEffect
@@ -47,6 +48,7 @@ fun AddressHandler(onStump: (String) -> Unit, onPerson: (String) -> Unit) {
         checking = false
         AddressIntake.pending.value = null
         when (c.optString("kind")) {
+            "paper" -> reading = r.text
             "stump", "person" -> adding = r.text to c.optString("kind")
             "ask" -> if (r.prefer != null) adding = r.text to r.prefer
                      else asking = c.put("text", r.text)
@@ -68,7 +70,25 @@ fun AddressHandler(onStump: (String) -> Unit, onPerson: (String) -> Unit) {
         } else onPerson(r.optString("peer"))
     }
 
-    if (checking || adding != null) androidx.compose.material3.AlertDialog(
+    // An LXMF paper message (Sideband, any LXMF app): LXMF reads it; it arrives like any message.
+    LaunchedEffect(reading) {
+        val text = reading ?: return@LaunchedEffect
+        val r = Engine.obj("paper_message", text)
+        reading = null
+        when (r.optString("result")) {
+            "delivered", "duplicate" -> {
+                Toast.makeText(ctx, ctx.getString(if (r.optString("result") == "delivered") R.string.paper_read
+                    else R.string.paper_duplicate), Toast.LENGTH_LONG).show()
+                val stumpKey = r.optString("stump").takeIf { it.isNotBlank() && it != "null" }
+                val peer = r.optString("peer").takeIf { it.isNotBlank() && it != "null" }
+                if (stumpKey != null) onStump(stumpKey) else if (peer != null) onPerson(peer)
+            }
+            "not_for_you" -> refused = ctx.getString(R.string.paper_not_for_you)
+            else -> refused = ctx.getString(R.string.paper_bad)
+        }
+    }
+
+    if (checking || adding != null || reading != null) androidx.compose.material3.AlertDialog(
         onDismissRequest = {}, containerColor = Amber.Panel, shape = Large,
         properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
         text = {

@@ -69,7 +69,9 @@ class MainActivity : ComponentActivity() {
      *  FireFly", Stump 1.0.0-beta.52, or another app's) is an address to add. */
     private fun routeFrom(intent: Intent?): Boolean {
         if (intent == null) return false
-        val link = intent.data?.takeIf { intent.action == Intent.ACTION_VIEW && it.scheme.equals("lxmf", ignoreCase = true) }
+        // lxmf:// (a Stump's link, beta.52), lxma:// (Columba, MeshChatX), lxm:// (a paper message)
+        val link = intent.data?.takeIf { intent.action == Intent.ACTION_VIEW &&
+            (it.scheme ?: "").lowercase() in setOf("lxmf", "lxma", "lxm") }
         if (link != null) {
             AddressIntake.submit(link.toString())
             intent.data = null                  // not again on rotation or return

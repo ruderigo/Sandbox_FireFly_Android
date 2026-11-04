@@ -382,7 +382,7 @@
     <string name="verify_gate_enter_anyway">Go in anyway</string>
     <string name="verify_gate_back">Back</string>
     <string name="scan_qr">Scan QR</string>
-    <string name="scan_prompt">Point at the QR code: a Stump\'s home page › Its address</string>
+    <string name="scan_prompt">Point at a QR code: an LXMF address (a Stump, Columba, MeshChatX…) or a paper message</string>
     <string name="scan_none">No code read. You can type the address instead.</string>
     <string name="scan_not_address">That code isn\'t an LXMF address: %1$s</string>
     <string name="add_stump_title">Add a Stump by its address</string>
@@ -401,4 +401,8 @@
     <string name="address_ok">OK</string>
     <string name="chat_is_stump">This address is a Stump: its rooms and messages are in Stumps.</string>
     <string name="chat_open_stump">Open in Stumps</string>
+    <string name="paper_read">Paper message read: it\'s in the conversation.</string>
+    <string name="paper_duplicate">This paper message was already read.</string>
+    <string name="paper_not_for_you">This paper message is for someone else: only its recipient can read it.</string>
+    <string name="paper_bad">This paper message can\'t be read: it may be damaged or incomplete.</string>
 </resources>

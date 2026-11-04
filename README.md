@@ -25,6 +25,24 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - Compatibility: a Stump with its billboard switched off now says so as
   "pas de babillard sur cette Bûche" / "no hay tablón en este Tronco";
   FireFly recognises both the new and the old wording.
+- **Every LXMF app's QR code**, so FireFly can message them all:
+  - `lxma://<address>:<public key>` (Columba, MeshChatX, the T-Deck LXMF
+    Messenger): its key, hex or base64url, checked against the address and
+    handed to Reticulum, so the contact can be written to at once, before any
+    announce; a forged one is refused ("not trusted"). A person's code:
+    Chats, unless FireFly knows the address is a Stump's.
+  - `lxm://` paper messages (Sideband, any LXMF app): a whole message in a
+    QR code, read by LXMF itself; it arrives in its sender's conversation
+    like any message. A duplicate, one for someone else and a damaged one
+    each say so.
+  - As before: the bare address (Sideband, NomadNet, Skywave), `lxmf://`, a
+    Stump's link.
+  - FireFly opens `lxma://` and `lxm://` links too (Android asks which app
+    if another one takes them).
+  - Not yet: Ratspeak's own format (undocumented; a sample is welcome).
+  - Tests: run_lxmf_codes (real lxma:// codes and paper messages made with
+    Reticulum and LXMF; a forged key; a message to an lxma:// contact goes
+    out at once).
 - Build 53, for Stump 1.0.0-beta.53.
 
 ### 0.5.2-beta.2: a Stump's QR code says it's a Stump (Stump 1.0.0-beta.52)

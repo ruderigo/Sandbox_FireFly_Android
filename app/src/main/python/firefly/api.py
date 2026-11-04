@@ -462,6 +462,11 @@ def address_add(text, kind):
         return _j({"error": str(e)})
 
 
+def paper_message(text):
+    """An LXMF paper message (lxm://) scanned or tapped: read it. -> see Core.read_paper_message."""
+    return _j(_need().read_paper_message(text))
+
+
 def peer_stump(peer_hex):
     """An open chat whose address turns out to be a Stump's: its Stumps entry ("" if not)."""
     c = _need()

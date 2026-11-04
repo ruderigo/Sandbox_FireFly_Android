@@ -137,7 +137,19 @@ def parse_address_link(text):
     m = _ADDRESS_TEXT.match(raw.lower())
     if not m:
         return None
-    out = {"address": m.group(1), "link": "://" in raw, "stump": None, "key": None, "key_bad": False}
+    out = {"address": m.group(1), "link": "://" in raw, "stump": None, "key": None, "key_bad": False,
+           "scheme": raw.split("://", 1)[0].lower() if "://" in raw else None}
+    # lxma://<address>:<public key> (Columba, MeshChatX, the T-Deck LXMF Messenger): the key
+    # after the colon, as hex (128) or base64url (86).
+    rest = raw.split("://", 1)[1] if "://" in raw else raw
+    after = rest[rest.find(m.group(1)) + 32:] if m.group(1) in rest.lower() else ""
+    if after.startswith(":"):
+        k = re.split(r"[?#/]", after[1:], maxsplit=1)[0]
+        key = _key_bytes(k)
+        if key is not None:
+            out["key"] = key
+        elif k:
+            out["key_bad"] = True
     q = raw.split("?", 1)[1].split("#", 1)[0] if "?" in raw else ""
     if q:
         try:
@@ -148,16 +160,31 @@ def parse_address_link(text):
             name = unquote(params["stump"][0]).strip()
             out["stump"] = "".join(ch for ch in name if ch.isprintable())[:40]
         if "key" in params:
-            k = params["key"][0]
-            try:
-                key = base64.urlsafe_b64decode(k + "=" * (-len(k) % 4))
-            except Exception:
-                key = b""
-            if len(key) == 64:
+            key = _key_bytes(params["key"][0])
+            if key is not None:
                 out["key"] = key
             else:
                 out["key_bad"] = True
     return out
+
+
+def _key_bytes(k):
+    """A 64-byte Reticulum public key written as hex (128) or base64url (86, padding optional)."""
+    import base64
+    k = (k or "").strip()
+    try:
+        if len(k) == 128 and all(c in "0123456789abcdefABCDEF" for c in k):
+            return bytes.fromhex(k)
+        key = base64.urlsafe_b64decode(k + "=" * (-len(k) % 4))
+        return key if len(key) == 64 else None
+    except Exception:
+        return None
+
+
+def is_paper_message(text):
+    """An LXMF paper message (lxm://<base64url>, Sideband and any LXMF app): a whole encrypted
+    message in a QR code or a link, not an address."""
+    return "".join(str(text or "").split()).lower().startswith("lxm://")
 
 
 def identity_for(address_hex, key):

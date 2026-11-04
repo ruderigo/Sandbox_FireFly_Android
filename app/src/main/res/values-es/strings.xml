@@ -382,7 +382,7 @@
     <string name="verify_gate_enter_anyway">Entrar de todos modos</string>
     <string name="verify_gate_back">Volver</string>
     <string name="scan_qr">Escanear QR</string>
-    <string name="scan_prompt">Apunta al código QR: página de inicio de un Tronco › Su dirección</string>
+    <string name="scan_prompt">Apunta a un código QR: una dirección LXMF (un Tronco, Columba, MeshChatX…) o un mensaje en papel</string>
     <string name="scan_none">No se leyó ningún código. Puedes escribir la dirección.</string>
     <string name="scan_not_address">Ese código no es una dirección LXMF: %1$s</string>
     <string name="add_stump_title">Añadir un Tronco por su dirección</string>
@@ -401,4 +401,8 @@
     <string name="address_ok">OK</string>
     <string name="chat_is_stump">Esta dirección es un Tronco: sus salas y mensajes están en Troncos.</string>
     <string name="chat_open_stump">Abrir en Troncos</string>
+    <string name="paper_read">Mensaje en papel leído: está en la conversación.</string>
+    <string name="paper_duplicate">Este mensaje en papel ya se leyó.</string>
+    <string name="paper_not_for_you">Este mensaje en papel es para otra persona: solo su destinatario puede leerlo.</string>
+    <string name="paper_bad">Este mensaje en papel no se puede leer: puede estar dañado o incompleto.</string>
 </resources>

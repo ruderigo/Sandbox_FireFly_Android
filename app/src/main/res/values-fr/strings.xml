@@ -382,7 +382,7 @@
     <string name="verify_gate_enter_anyway">Entrer quand même</string>
     <string name="verify_gate_back">Retour</string>
     <string name="scan_qr">Scanner le QR</string>
-    <string name="scan_prompt">Visez le code QR : page d\'accueil d\'une Bûche › Son adresse</string>
+    <string name="scan_prompt">Visez un code QR : une adresse LXMF (une Bûche, Columba, MeshChatX…) ou un message papier</string>
     <string name="scan_none">Aucun code lu. Vous pouvez taper l\'adresse à la place.</string>
     <string name="scan_not_address">Ce code n’est pas une adresse LXMF : %1$s</string>
     <string name="add_stump_title">Ajouter une Bûche par son adresse</string>
@@ -401,4 +401,8 @@
     <string name="address_ok">OK</string>
     <string name="chat_is_stump">Cette adresse est une Bûche : ses salons et messages sont dans Bûches.</string>
     <string name="chat_open_stump">Ouvrir dans Bûches</string>
+    <string name="paper_read">Message papier lu : il est dans la discussion.</string>
+    <string name="paper_duplicate">Ce message papier a déjà été lu.</string>
+    <string name="paper_not_for_you">Ce message papier est pour quelqu’un d’autre : seul son destinataire peut le lire.</string>
+    <string name="paper_bad">Ce message papier est illisible : il est peut-être abîmé ou incomplet.</string>
 </resources>

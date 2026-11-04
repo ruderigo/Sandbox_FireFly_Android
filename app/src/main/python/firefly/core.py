@@ -340,6 +340,8 @@ class Core:
         second), else 4. the user is asked ("ask", with a suggestion: Stump for the bare
         address a Stump's page shows, person for another app's link).
         -> {"kind": stump|person|ask|bad, "address", "name", "how", "suggest", "reachable", "error"}"""
+        if stump.is_paper_message(text):
+            return {"kind": "paper"}             # a message to read, not an address (LXMF paper message)
         a = stump.parse_address_link(text)
         if a is None:
             return {"kind": "bad", "error": "not an LXMF address (32 characters, 0-9 and a-f)"}
@@ -357,6 +359,9 @@ class Core:
         name = self.known_stump_name(h)
         if name is not None:
             return {**out, "kind": "stump", "how": "known", "name": name or None}
+        if a["scheme"] == "lxma":
+            # Columba's, MeshChatX's, a T-Deck's: a person's contact code (a Stump's says stump=).
+            return {**out, "kind": "person", "how": "lxma"}
         card = self._stump_on_wifi(h)
         if card is not None:
             return {**out, "kind": "stump", "how": "wifi", "name": card.get("name") or None}
@@ -393,6 +398,36 @@ class Core:
         except Exception as e:
             RNS.log(f"Wi-Fi check for {h[:8]} failed: {e}", RNS.LOG_DEBUG)
         return None
+
+    def read_paper_message(self, text):
+        """An LXMF paper message (lxm://, a QR code from Sideband or any LXMF app): LXMF's own
+        reader takes it, decrypts it if it's for us, and it arrives like any message (its
+        sender's conversation, or its Stump). -> {"kind": "paper", "result": delivered |
+        duplicate | not_for_you | bad, "peer": its sender, "stump": its Stumps entry if a Stump's}"""
+        import base64
+        uri = "".join(str(text or "").split())
+        uri = "lxm://" + uri[6:]                  # the scheme as LXMF expects it, whatever the case
+        out = {"kind": "paper", "peer": None, "stump": None}
+        try:
+            data = base64.urlsafe_b64decode(uri[6:].replace("/", "") + "==")
+        except Exception:
+            return {**out, "result": "bad"}
+        if len(data) < LXMF.LXMessage.LXMF_OVERHEAD:
+            return {**out, "result": "bad"}
+        if data[:16] != self.local.hash:
+            return {**out, "result": "not_for_you"}
+        try:
+            plain = self.local.decrypt(data[16:])
+            out["peer"] = plain[:16].hex() if plain else None
+        except Exception:
+            plain = None
+        if plain is None:
+            return {**out, "result": "bad"}
+        r = self.router.ingest_lxm_uri(uri, signal_local_delivery="delivered", signal_duplicate="duplicate")
+        out["result"] = r if r in ("delivered", "duplicate") else "bad"
+        if out["peer"] and self.known_stump_name(out["peer"]) is not None:
+            out["stump"] = mesh_key(out["peer"])
+        return out
 
     def address_add(self, text, kind):
         """Add what address_check said, or what the user chose for "ask": "stump" -> the Stumps
