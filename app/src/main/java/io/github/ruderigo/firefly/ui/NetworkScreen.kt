@@ -230,7 +230,7 @@ private fun PropagationSummary(p: JSONObject, go: (Route) -> Unit) {
     val stump = p.optString("stump").takeIf { it.isNotBlank() && it != "null" }
     KeyValue(stringResource(R.string.node), when {
         node == null -> stringResource(if (p.optString("mode") == "off") R.string.prop_mode_off else R.string.none_heard)
-        else -> (name ?: shortHash(node)) + if (stump != null) "  · Stump" else ""
+        else -> (name ?: shortHash(node)) + if (stump != null) "  · " + stringResource(R.string.find_tag_yes) else ""
     })
     KeyValue(stringResource(R.string.prop_choice), stringResource(when (p.optString("mode")) {
         "manual" -> R.string.prop_mode_manual; "off" -> R.string.prop_mode_off; else -> R.string.prop_mode_auto }))
@@ -288,7 +288,7 @@ fun PropagationScreen(back: () -> Unit) {
                     else if (!enabled) add(stringResource(R.string.prop_switched_off))
                 }.joinToString("  ")
                 val title = (n.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: stringResource(R.string.propagation)) +
-                    if (!n.isNull("stump") && n.optString("stump").isNotBlank()) "  · Stump" else ""
+                    if (!n.isNull("stump") && n.optString("stump").isNotBlank()) "  · " + stringResource(R.string.find_tag_yes) else ""
                 ChoiceRow(title, details, mode == "manual" && n.optBoolean("selected"), selectedHint = n.optBoolean("selected")) {
                     Engine.fire("use_propagation_node", n.optString("hash"))
                 }

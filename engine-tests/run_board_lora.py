@@ -71,6 +71,11 @@ sess.on_mesh_content("<alice> hello there", title="#main")
 check("a room line meanwhile stays a room line", view()["state"] == "waiting" and any("hello there" in l["body"] for l in json.loads(api.stump_view(K, "main"))["lines"]))
 sess.on_mesh_content("no billboard on this Stump")
 check("billboard switched off: off", view()["state"] == "off")
+for words in ("pas de babillard sur cette Bûche", "no hay tablón en este Tronco",     # Stump 1.0.0-beta.53
+              "pas de babillard sur ce Stump"):                                       # before
+    api.stump_board_lora(K)
+    sess.on_mesh_content(words)
+    check(f"...in its own words too: {words!r}", view()["state"] == "off", view()["state"])
 
 # The field case (Oct 24): a long post went out slowly; meanwhile the list was asked again and
 # a notice opened. The answers come back late and out of order: each goes where it belongs,

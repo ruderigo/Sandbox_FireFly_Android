@@ -204,7 +204,9 @@ LORA_DOWN_MARKERS = ("radio has been down", "la radio est coupée", "la radio ll
 BOARD_LINE = re.compile(r"^#(\d{6,}(?:\.\d+)?) (.*)$")
 POST_OK = re.compile("^\u2713 #(\\d{6,})")
 BOARD_NOTHING = ("nothing on the billboard", "rien au babillard", "nada en el tablón")
-BOARD_OFF = ("no billboard on this stump", "pas de babillard sur ce stump", "no hay tablón en este stump")
+# Stump 1.0.0-beta.53 names itself in each language: "cette Bûche", "este Tronco" (before: "ce Stump").
+BOARD_OFF = ("no billboard on this stump", "pas de babillard sur ce stump", "no hay tablón en este stump",
+             "pas de babillard sur cette bûche", "no hay tablón en este tronco")
 BOARD_GONE = ("no notice #", "pas d'annonce #", "no hay anuncio #")
 
 

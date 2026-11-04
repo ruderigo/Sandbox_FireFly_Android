@@ -158,7 +158,7 @@ fun StumpOverWifi(go: (Route) -> Unit) {
             Text(when {
                 p == null -> stringResource(R.string.find_checking, gw)
                 p.optBoolean("stump") -> stringResource(R.string.join_wifi_gateway_stump,
-                    p.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: "Stump", gw)
+                    p.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: stringResource(R.string.find_tag_yes), gw)
                 else -> stringResource(R.string.join_wifi_gateway_router, gw)
             }, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
         }
