@@ -359,12 +359,13 @@ class Core:
         name = self.known_stump_name(h)
         if name is not None:
             return {**out, "kind": "stump", "how": "known", "name": name or None}
-        if a["scheme"] == "lxma":
-            # Columba's, MeshChatX's, a T-Deck's: a person's contact code (a Stump's says stump=).
-            return {**out, "kind": "person", "how": "lxma"}
         card = self._stump_on_wifi(h)
         if card is not None:
             return {**out, "kind": "stump", "how": "wifi", "name": card.get("name") or None}
+        if a["scheme"] == "lxma":
+            # Columba's, MeshChatX's, a T-Deck's contact code: a person's, unless it's a Stump's
+            # (a Stump shows one too since beta.53, for Columba): known, or on this Wi-Fi, above.
+            return {**out, "kind": "person", "how": "lxma"}
         return {**out, "kind": "ask", "suggest": "person" if a["link"] else "stump"}
 
     def known_stump_name(self, h):

@@ -64,6 +64,18 @@ i4, A4 = new_id()
 c._on_stump_beacon(A4, "LaBuche", "1.0.0-beta.53", [])
 check("an lxma:// code of a Stump FireFly knows: the Stumps list", chk(f"lxma://{A4}:{i4.get_public_key().hex()}")["kind"] == "stump")
 
+# A Stump's own lxma:// code (beta.53's second QR code, for Columba), on its Wi-Fi: a Stump.
+os.environ["FIREFLY_BROADCAST"] = "127.0.0.31"
+sys.path.insert(0, HERE)
+from fake_stump import FakeRRC, rns_verify, serve_http, serve_udp
+rrc = FakeRRC(rns_verify); rrc.enable_hello()
+serve_http(47790, rrc, host="127.0.0.31")
+serve_udp("127.0.0.31", {"stump": 1, "name": "Racine", "lxmf": rrc.node_lxmf, "release": "1.0.0-beta.53",
+                         "http": ["http://127.0.0.31:47790/"], "here": "http://127.0.0.31:47790/"})
+r = chk(f"lxma://{rrc.node_lxmf}:{rrc.node_ident.get_public_key().hex()}")
+check("a Stump's lxma:// code (beta.53, for Columba), on its Wi-Fi: the Stumps list, not Chats",
+      r["kind"] == "stump" and r["how"] == "wifi", r)
+
 # --- the others, as before
 _, A5 = new_id()
 check("the bare address (Sideband, NomadNet, Skywave): asked, Stump suggested", chk(A5)["kind"] == "ask")
