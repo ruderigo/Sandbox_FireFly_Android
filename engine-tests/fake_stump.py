@@ -685,7 +685,16 @@ def serve_http(port, rrc, web=None, host="127.0.0.1", node=None, delay=0.0, dire
                 out["hello"] = rrc.hello(key)
             self._json(out)
 
-    srv = ThreadingHTTPServer((host, port), H)
+    # A fixed port can be held for a moment by one of the engine's own outgoing connections
+    # (a random local port that happened to be this one): wait for it rather than fail.
+    for attempt in range(25):
+        try:
+            srv = ThreadingHTTPServer((host, port), H)
+            break
+        except OSError as e:
+            if e.errno != 98 or attempt == 24:
+                raise
+            time.sleep(0.2)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 

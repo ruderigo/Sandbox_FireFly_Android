@@ -24,6 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # The fake Stumps listen on fixed ports in 47000-48999; the engine's own outgoing
+      # connections take random local ports, which could land there ("Address already in
+      # use"). Keep those above.
+      - name: Keep random local ports off the tests' ones
+        run: sudo sysctl -w net.ipv4.ip_local_port_range="50000 65000"
+
       # Same Python as Chaquopy embeds in the app (chaquopy.defaultConfig.version).
       - uses: actions/setup-python@v6
         with:
