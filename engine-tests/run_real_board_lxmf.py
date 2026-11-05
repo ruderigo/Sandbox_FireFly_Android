@@ -54,12 +54,16 @@ node = subprocess.Popen([sys.executable, "-u", "stump_pc.py"], cwd=folder, stdou
                         stderr=subprocess.STDOUT, text=True)
 op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 check("the real Stump starts", wait(lambda: op.open(f"http://{IP}:{PORT}/node.json", timeout=3).read(), 60))
+try:
+    STUMP_REL = int(str(json.loads(op.open(f"http://{IP}:{PORT}/node.json", timeout=5).read()).get("release", "")).rsplit(".", 1)[-1])
+except Exception:
+    STUMP_REL = 0
 LX = json.loads(op.open(f"http://{IP}:{PORT}/node.json", timeout=5).read())["lxmf"]
 
 from firefly import api
 class L:
     def onEvent(self, s): pass
-api.start(tempfile.mkdtemp(prefix="ff-bl-"), None, None, L())
+api.start(tempfile.mkdtemp(prefix="ff-bl-"), None, None, L(), "0.6.0-beta.53", 53)
 c = api._core
 c.settings.update({"auto_interface": False, "tcp_peers": [f"127.0.0.1:{HUB}"]})
 c.reattach_optional_interfaces()
@@ -67,6 +71,20 @@ import RNS
 RNS.Transport.request_path(bytes.fromhex(LX))
 print("     path to the Stump known before sending:", wait(lambda: RNS.Transport.has_path(bytes.fromhex(LX)), 20),
       "(LXMF asks for one itself if not)", flush=True)
+# Stump 1.0.0-beta.53+: FireFly's announce says it's a Stump app (stump:firefly-android/...);
+# the Stump records it (stump_apps.json) from the announce alone, before any /auth.
+def apps_file():
+    for root, _, files in os.walk(folder):
+        if "stump_apps.json" in files:
+            try:
+                return json.load(open(os.path.join(root, "stump_apps.json"), encoding="utf-8"))
+            except Exception:
+                return {}
+    return {}
+c.announce()
+known = wait(lambda: c.address in apps_file(), 30)
+if known or STUMP_REL >= 53:
+    check("the real Stump knows FireFly is a Stump app from its announce alone (no /auth yet)", known, apps_file())
 K = "mesh:" + LX
 c.store.upsert_stump_node(K, "mesh", LX, name="LaBuche", last_seen=time.time())
 view = lambda: json.loads(api.stump_board_lora_view(K))
