@@ -44,7 +44,7 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
     Reticulum and LXMF; a forged key; a message to an lxma:// contact goes
     out at once).
 - **FireFly says it's FireFly in its announce** (asked by Project Stump,
-  beta.53): a fourth item, `stump:firefly/0.6.0.b.53` (the app's version,
+  beta.53): a fourth item, `stump:firefly-android/0.6.0.b.53` (the app's version,
   then its build), in every announce and in the answers to path requests.
   A Stump then knows FireFly from a plain LXMF app over LoRa too, before
   any `/auth`, and never rewords what FireFly reads. Upstream LXMF reads

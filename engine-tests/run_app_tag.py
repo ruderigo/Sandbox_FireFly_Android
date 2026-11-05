@@ -2,7 +2,7 @@
 
     python3 run_app_tag.py
 
-The announce's app data gets a fourth item, "stump:firefly/<version>.b.<build>", so a
+The announce's app data gets a fourth item, "stump:firefly-android/<version>.b.<build>", so a
 Stump knows FireFly from a plain LXMF app over LoRa too (and never rewords its lines).
   * in every announce FireFly sends, and in the ones answering a path request;
   * upstream LXMF (what Sideband, NomadNet, MeshChat, Columba run) still reads the name,
@@ -22,11 +22,11 @@ def check(name, ok, detail=""):
     print(("PASS " if ok else "FAIL ") + name + (f"  ({str(detail)[:300]})" if detail and not ok else ""))
     fails += 0 if ok else 1
 
-check("the tag: version numbers, then b. and the build", stump.app_tag("0.6.0-beta", 53) == "stump:firefly/0.6.0.b.53",
+check("the tag: version numbers, then b. and the build", stump.app_tag("0.6.0-beta", 53) == "stump:firefly-android/0.6.0.b.53",
       stump.app_tag("0.6.0-beta", 53))
-check("...a short version gets its .0", stump.app_tag("0.6", 53) == "stump:firefly/0.6.0.b.53")
-check("...a beta number isn't part of it", stump.app_tag("0.5.2-beta.3", 53) == "stump:firefly/0.5.2.b.53")
-check("...without a version (tests, a desktop run): still starts with stump", stump.app_tag() == "stump:firefly")
+check("...a short version gets its .0", stump.app_tag("0.6", 53) == "stump:firefly-android/0.6.0.b.53")
+check("...a beta number isn't part of it", stump.app_tag("0.5.2-beta.3", 53) == "stump:firefly-android/0.5.2.b.53")
+check("...without a version (tests, a desktop run): still starts with stump", stump.app_tag() == "stump:firefly-android")
 
 class L:
     def onEvent(self, s): pass
@@ -38,7 +38,7 @@ c.local.display_name = "Rod Bûche"
 data = c.router.get_announce_app_data(c.local.hash)
 items = msgpack.unpackb(data)
 check("the announce's app data: four items, the tag last", isinstance(items, list) and len(items) == 4
-      and items[3] == "stump:firefly/0.6.0.b.53", items)
+      and items[3] == "stump:firefly-android/0.6.0.b.53", items)
 check("upstream LXMF reads the name as before (Sideband, Columba…)", LXMF.display_name_from_app_data(data) == "Rod Bûche",
       LXMF.display_name_from_app_data(data))
 check("...the stamp cost as before (none)", LXMF.stamp_cost_from_app_data(data) is None)
@@ -61,7 +61,7 @@ RNS.Destination.announce = orig
 
 # Other apps' announces: three items (Sideband), four (a Stump app), FireFly reads the name.
 for label, ad in [("three items (Sideband)", msgpack.packb([b"Alice", None, [LXMF.SF_COMPRESSION]])),
-                  ("four items (a Stump app)", msgpack.packb([b"Bob", 8, [LXMF.SF_COMPRESSION], "stump:firefly/0.9.2.b.53"]))]:
+                  ("four items (a Stump app)", msgpack.packb([b"Bob", 8, [LXMF.SF_COMPRESSION], "stump:firefly-rk3326/0.9.3"]))]:
     i = RNS.Identity(); d = RNS.Destination.hash(i, "lxmf", "delivery")
     c._on_delivery_announce(d, i, ad)
     p = c.store.peer(d.hex()) or {}

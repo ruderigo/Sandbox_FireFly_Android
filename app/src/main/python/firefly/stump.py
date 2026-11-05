@@ -184,10 +184,10 @@ def _key_bytes(k):
 def app_tag(version=None, build=None):
     """What FireFly says it is, as the fourth item of its LXMF announce (asked by Project
     Stump, beta.53): a string starting "stump", so a Stump knows a Stump app from Sideband
-    over LoRa too and never rewords what FireFly reads. "stump:firefly/0.6.0.b.53": the
+    over LoRa too and never rewords what FireFly reads. "stump:firefly-android/0.6.0.b.53": the
     app's version (its numbers: 0.6.0-beta -> 0.6.0), then b. and its build."""
     m = re.match(r"\d+(?:\.\d+){0,2}", str(version or ""))
-    tag = "stump:firefly"
+    tag = "stump:firefly-android"         # the handheld says stump:firefly-rk3326/…
     if m:
         parts = (m.group(0).split(".") + ["0", "0"])[:3]
         tag += "/" + ".".join(parts)
