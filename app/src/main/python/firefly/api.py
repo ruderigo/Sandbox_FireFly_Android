@@ -30,13 +30,15 @@ def _need():
 
 
 # ------------------------------------------------------------------ lifecycle
-def start(home, links, http, listener):
-    """Start once per process. Must run on the Python main thread (see core.start)."""
+def start(home, links, http, listener, version=None, build=None):
+    """Start once per process. Must run on the Python main thread (see core.start).
+    version, build: the app's (0.6.0-beta, 53), for the "I'm FireFly" tag in its announces."""
     global _core
     with _lock:
         if _core is not None and _core.running:
             return _core.address
-        _core = Core(str(home), links=links, http=http, listener=listener)
+        _core = Core(str(home), links=links, http=http, listener=listener,
+                     version=None if version is None else str(version), build=None if build is None else int(build))
         return _core.start()
 
 

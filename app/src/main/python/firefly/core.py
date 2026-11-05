@@ -63,7 +63,8 @@ class NullLinks:
 
 
 class Core:
-    def __init__(self, home, links=None, http=None, listener=None, log=print):
+    def __init__(self, home, links=None, http=None, listener=None, log=print, version=None, build=None):
+        self.app_tag = stump.app_tag(version, build)      # in every announce: "I'm FireFly" (Stump beta.53)
         self.paths = Paths(home)
         self.paths.ensure()
         self.links = links or NullLinks()
@@ -111,6 +112,10 @@ class Core:
         self.reticulum = RNS.Reticulum(configdir=self.paths.rns_config_dir, loglevel=int(s["log_level"]))
         self.identity = self._load_identity()
         self.router = LXMRouter(identity=self.identity, storagepath=self.paths.lxmf_storage)
+        # Every announce says it's FireFly: the ones it sends, and the ones that answer a path
+        # request (LXMF builds both with get_announce_app_data).
+        lxmf_app_data = self.router.get_announce_app_data
+        self.router.get_announce_app_data = lambda h: stump.with_app_tag(lxmf_app_data(h), self.app_tag)
         self.local = self.router.register_delivery_identity(self.identity, display_name=s["display_name"])
         self.router.register_delivery_callback(self._on_message)
         for b in self.store.blocked():

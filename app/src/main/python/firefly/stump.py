@@ -181,6 +181,35 @@ def _key_bytes(k):
         return None
 
 
+def app_tag(version=None, build=None):
+    """What FireFly says it is, as the fourth item of its LXMF announce (asked by Project
+    Stump, beta.53): a string starting "stump", so a Stump knows a Stump app from Sideband
+    over LoRa too and never rewords what FireFly reads. "stump:firefly/0.6.0.b.53": the
+    app's version (its numbers: 0.6.0-beta -> 0.6.0), then b. and its build."""
+    m = re.match(r"\d+(?:\.\d+){0,2}", str(version or ""))
+    tag = "stump:firefly"
+    if m:
+        parts = (m.group(0).split(".") + ["0", "0"])[:3]
+        tag += "/" + ".".join(parts)
+        if build:
+            tag += f".b.{int(build)}"
+    return tag
+
+
+def with_app_tag(app_data, tag):
+    """LXMF's own announce data [name, stamp cost, [functions]] with the app tag after it.
+    Upstream LXMF reads the first three items only, so every LXMF app reads it as before."""
+    if not app_data or not tag:
+        return app_data
+    try:
+        d = msgpack.unpackb(app_data)
+    except Exception:
+        return app_data
+    if not isinstance(d, list) or len(d) < 3:
+        return app_data
+    return msgpack.packb(list(d[:3]) + [tag])
+
+
 def is_paper_message(text):
     """An LXMF paper message (lxm://<base64url>, Sideband and any LXMF app): a whole encrypted
     message in a QR code or a link, not an address."""

@@ -43,6 +43,13 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
   - Tests: run_lxmf_codes (real lxma:// codes and paper messages made with
     Reticulum and LXMF; a forged key; a message to an lxma:// contact goes
     out at once).
+- **FireFly says it's FireFly in its announce** (asked by Project Stump,
+  beta.53): a fourth item, `stump:firefly/0.6.0.b.53` (the app's version,
+  then its build), in every announce and in the answers to path requests.
+  A Stump then knows FireFly from a plain LXMF app over LoRa too, before
+  any `/auth`, and never rewords what FireFly reads. Upstream LXMF reads
+  only the first three items, so Sideband, NomadNet, MeshChat and Columba
+  read FireFly's name and stamp cost as before. Test: run_app_tag.
 - Build 53, for Stump 1.0.0-beta.53.
 
 ### 0.5.2-beta.2: a Stump's QR code says it's a Stump (Stump 1.0.0-beta.52)

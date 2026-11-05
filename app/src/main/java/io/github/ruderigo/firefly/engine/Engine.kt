@@ -81,7 +81,12 @@ object Engine {
             try {
                 if (!Python.isStarted()) Python.start(AndroidPlatform(app))
                 val module = Python.getInstance().getModule("firefly.api")
-                val address = module.callAttr("start", app.filesDir.absolutePath + "/firefly", links, http, listener)
+                // The app's version and build go into every announce ("stump:firefly/0.6.0.b.53").
+                val info = runCatching { app.packageManager.getPackageInfo(app.packageName, 0) }.getOrNull()
+                val versionName = info?.versionName
+                val build = info?.let { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(it).toInt() }
+                val address = module.callAttr("start", app.filesDir.absolutePath + "/firefly", links, http, listener,
+                    versionName, build)
                 api = module
                 links.register()
                 _state.value = State.Running(address.toString())
