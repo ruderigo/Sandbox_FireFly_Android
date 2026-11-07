@@ -29,8 +29,8 @@ android {
     applicationId = "io.github.ruderigo.firefly"
     minSdk = 26
     targetSdk = 36
-    versionCode = 53
-    versionName = "0.6.0-beta.53"
+    versionCode = 57
+    versionName = "0.6.1-beta.57"
     ndk { abiFilters += abis }
   }
 

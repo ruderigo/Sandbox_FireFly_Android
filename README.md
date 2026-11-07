@@ -8,13 +8,13 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.0-beta.53** (sandbox, for Stump 1.0.0-beta.53; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.1-beta.57** (sandbox, for Stump 1.0.0-beta.57; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
-### Next build (in progress): find several Stumps at once
+### 0.6.1-beta.57: find several Stumps at once (Stump 1.0.0-beta.57)
 - **Find Stumps** (the button in the Stumps list) opens a popup that looks
   and waits while it looks: the Stumps on this Wi-Fi that aren't in your list
   yet (STUMP?, about a second, then the sweep for older ones, 5-15 s), each
@@ -32,7 +32,8 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
   as a Stump before. Other networks aren't listed any more (they were, as
   "maybe"), here and on the Find Stumps page.
 - Pull down in the Stumps list still only refreshes who's online.
-- Tests: run_find_popup; run_discovery (the names).
+- Tests: run_find_popup; run_discovery (the names). Checked against a real Stump 1.0.0-beta.57.
+- Build 57, for Stump 1.0.0-beta.57.
 
 ### 0.6.0-beta.53: each language names the Stump its own way; every LXMF app's QR code (Stump 1.0.0-beta.53)
 - French says **la Bûche** (les Bûches), Spanish **el Tronco** (los Troncos),
