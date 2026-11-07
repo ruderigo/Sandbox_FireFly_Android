@@ -662,6 +662,58 @@ def discover_lan(own_ip, prefix, skip_json="[]"):
     return _j(found)
 
 
+def find_new_stumps(stage, own_ip=None, prefix=24, skip_json="[]"):
+    """The Find Stumps popup: Stumps on this Wi-Fi that aren't in the list yet.
+    stage "quick": STUMP? answers (about a second); "sweep": those plus the Stumps they
+    heard and the /24 sweep for older ones (5-15 s). -> [{"name", "base", "lxmf", "release",
+    "found_by"}], one per Stump, Stumps already known left out (followed to their new
+    address instead, as Find Stumps does)."""
+    from . import discovery
+    c = _need()
+    skip = set(json.loads(skip_json or "[]"))
+    if stage == "quick":
+        found = [dict(card, found_by="answer") for card in discovery.ask(c.http) if card.get("base")]
+    else:
+        found = discovery.find_all(c.http, str(own_ip) if own_ip else None, int(prefix or 24))
+    host = lambda b: b.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+    found = [f for f in found if f.get("base") and host(f["base"]) not in skip]
+    try:
+        c.refresh_wifi([{"lxmf": f.get("lxmf"), "base": f["base"], "name": f.get("name")} for f in found if f.get("lxmf")])
+    except Exception:
+        pass
+    known_bases = {n["address"] for n in c.store.stump_nodes() if n["transport"] == "wifi"}
+    out, seen = [], set()
+    for f in found:
+        lx = (f.get("lxmf") or "").lower() or None
+        k = lx or f["base"]
+        if k in seen or f["base"] in known_bases or (lx and c.known_stump_name(lx) is not None):
+            continue
+        seen.add(k)
+        out.append({"name": f.get("name"), "base": f["base"], "lxmf": lx, "release": f.get("release"),
+                    "found_by": f.get("found_by")})
+    return _j(out)
+
+
+def stumps_add_found(found_json):
+    """Add the Stumps ticked in the Find Stumps popup to the list, none opened: each gets its
+    Wi-Fi session (which greets it, /hello) and its name. -> {"added": n, "keys": [...]}"""
+    c = _need()
+    keys = []
+    for f in json.loads(found_json or "[]"):
+        base = f.get("base")
+        if not base:
+            continue
+        sess = c.open_stump_wifi(base)
+        fields = {k: v for k, v in (("name", f.get("name")), ("lxmf", f.get("lxmf"))) if v}
+        if fields:
+            c.store.upsert_stump_node(sess.key, "wifi", sess.pipe.base if hasattr(sess.pipe, "base") else base, **fields)
+        if f.get("lxmf"):
+            c.retire_old_wifi(f["lxmf"], keep=sess.key)
+        keys.append(sess.key)
+    c.emit({"type": "changed"})
+    return _j({"added": len(keys), "keys": keys})
+
+
 def stump_web_reachable(key):
     """Does this Wi-Fi Stump answer right now? (GET /node.json, 1.5 s, any answer.) -> true/false"""
     return _j(_need()._web_answers(str(key)))

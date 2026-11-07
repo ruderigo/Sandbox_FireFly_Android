@@ -84,7 +84,7 @@ class FakeRRC:
         if self.hello_forge:
             import RNS
             signer = RNS.Identity()
-        return {"stump": "LaBuche Test", "lxmf": self.node_lxmf, "nonce": n,
+        return {"stump": getattr(self, "node_name", "LaBuche Test"), "lxmf": self.node_lxmf, "nonce": n,
                 "pub": self.node_ident.get_public_key().hex(),
                 "sig": signer.sign((n + self.node_lxmf).encode()).hex(), "hello": self.hello(key) or "done"}
 
@@ -307,7 +307,7 @@ class FakeRRC:
             return {"room": u["room"], "nick": u["nick"], "topic": self.topics[u["room"]],
                     "rooms": sorted(self.rooms), "messages": msgs, "dms": dms,
                     "users": [x["nick"] for x in self.users.values() if x["room"] == u["room"]], "stumps": [],
-                    "node": {"name": "LaBuche Test", "lxmf": self.node_lxmf},
+                    "node": {"name": getattr(self, "node_name", "LaBuche Test"), "lxmf": self.node_lxmf},
                     **({"renamed": dict(self.renamed)} if self.renamed else {}),   # Stump 1.0.0-beta.25
                     "hw": {"state": "online", "title": "USB /dev/ttyUSB0 · Heltec V3 · RNode 1.82"}}
 

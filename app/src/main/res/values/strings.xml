@@ -405,4 +405,20 @@
     <string name="paper_duplicate">This paper message was already read.</string>
     <string name="paper_not_for_you">This paper message is for someone else: only its recipient can read it.</string>
     <string name="paper_bad">This paper message can\'t be read: it may be damaged or incomplete.</string>
+    <string name="find_popup_searching">Looking on this Wi-Fi…</string>
+    <string name="find_popup_sweeping">Looking for older Stumps on this Wi-Fi too…</string>
+    <string name="find_popup_none">No new Stumps on this Wi-Fi.</string>
+    <string name="find_popup_not_wifi">Not on a Wi-Fi: no Stumps to look for here.</string>
+    <string name="find_select_all">Select all</string>
+    <string name="find_deselect_all">Deselect all</string>
+    <string name="find_popup_add">Add (%1$d)</string>
+    <string name="find_popup_added">Added to your Stumps: %1$d</string>
+    <string name="find_popup_hotspots">Stump hotspots nearby</string>
+    <string name="find_popup_scanning">Scanning for hotspots…</string>
+    <string name="find_popup_hotspots_none">No Stump hotspot nearby.</string>
+    <string name="find_popup_hotspots_permission">Allow FireFly to scan for Wi-Fi to see Stump hotspots nearby.</string>
+    <string name="find_popup_allow">Allow</string>
+    <string name="find_popup_joining">Joining…</string>
+    <string name="find_popup_lora">Stumps heard over LoRa: %1$d, already in your list.</string>
+    <string name="find_popup_more">More… (QR code, an address)</string>
 </resources>

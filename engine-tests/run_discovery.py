@@ -109,7 +109,14 @@ check("steadiness bars", [discovery.steady_bars(*a) for a in ((40, 0, 5), (300, 
 check("LoRa bars from SNR", [discovery.lora_bars(s) for s in (8, 0, -8, -14, None)] == [3, 2, 1, 0, None])
 check("overall: the weakest known part", discovery.overall(3, 1, None) == 1 and discovery.overall(None) is None)
 check("hotspot names", [discovery.looks_like_stump(s, ["Bob's Stump Café"]) for s in
-      ("LaBuche-Stump.web.app", "Bob's Stump Café", "stump-b", "Starbucks", "")] == ["yes", "yes", "likely", "maybe", "no"])
+      ("LaBuche-Stump.web.app", "Bob's Stump Café", "stump-b", "Starbucks", "")] == ["yes", "yes", "likely", "no", "no"])
+names = ["La Bûche", "LABUCHE_2", "labuche", "Bûche-Stump", "stump-garage", "STUMP", "Tronco del parque",
+         "TRONCO-3", "la.bu.che", "La-Bûche 🌲"]
+check("names that say Stump, any language, any capitals, accents, spaces, dashes or dots",
+      all(discovery.looks_like_stump(n) == "likely" for n in names), [(n, discovery.looks_like_stump(n)) for n in names])
+check("...run together too (LaBucheStump2)", discovery.looks_like_stump("LaBucheStump2") == "likely")
+check("other networks aren't listed", [discovery.looks_like_stump(n) for n in
+      ["Starbucks", "Bell-5G", "Buchanan's", "Stamp Shop", "TP-Link_8812"]] == ["no"] * 5)
 
 print("ALL PASS" if not fails else f"{fails} FAILED")
 sys.exit(1 if fails else 0)

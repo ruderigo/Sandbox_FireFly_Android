@@ -85,6 +85,9 @@ fun StumpsScreen(go: (Route) -> Unit) {
         onRemove = { removing = n; acting = null }) }
     removing?.let { n -> ConfirmRemoveStump(n.optString("name").ifBlank { n.optString("address") }, onDismiss = { removing = null }) {
         keysOf(n).forEach { Engine.fire("stump_remove", it) }; removing = null } }
+    // Find Stumps: a popup that looks on this Wi-Fi and nearby, and adds the ones ticked.
+    var finding by remember { mutableStateOf(false) }
+    if (finding) FindStumpsPopup(onDismiss = { finding = false }, onMore = { finding = false; go(Route.FindStumps) })
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshAll() },
         modifier = Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize()) {
@@ -92,7 +95,7 @@ fun StumpsScreen(go: (Route) -> Unit) {
             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.stumps_intro), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                Button(stringResource(R.string.find_stumps)) { go(Route.FindStumps) }
+                Button(stringResource(R.string.find_stumps)) { finding = true }
             }
         }
         if (nodes.isEmpty()) item { Empty(stringResource(R.string.no_stumps)) }

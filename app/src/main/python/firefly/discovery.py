@@ -260,15 +260,29 @@ def sweep(http, own_ip, prefix, skip=(), timeout_ms=SWEEP_TIMEOUT_MS, workers=SW
 DEFAULT_SSID = "LaBuche-Stump.web.app"        # captive_portal.DEFAULT_SSID
 
 
+STUMP_WORDS = ("labuche", "stump", "tronco")   # each language's name for it (Nov 2026)
+
+
+def ssid_says_stump(ssid):
+    """A hotspot name that says it's a Stump: labuche, stump or tronco in it, whatever the
+    capitals, accents, spaces, dashes or dots ("La Bûche", "LABUCHE_2", "stump-garage",
+    "Tronco del parque")."""
+    import unicodedata
+    plain = unicodedata.normalize("NFKD", ssid or "")
+    plain = "".join(ch for ch in plain if ch.isalnum() and not unicodedata.combining(ch)).lower()
+    return any(w in plain for w in STUMP_WORDS)
+
+
 def looks_like_stump(ssid, known=()):
-    """From a scan: a hotspot we joined as a Stump before, the firmware's default name,
-    or a name that says so. Anything else is only "maybe"."""
+    """From a scan: "yes" for a hotspot we joined as a Stump before or the firmware's default
+    name, "likely" for a name that says so (ssid_says_stump), "no" for anything else
+    (other networks aren't listed)."""
     s = (ssid or "").strip()
     if not s:
         return "no"
     if s in set(known) or s == DEFAULT_SSID:
         return "yes"
-    return "likely" if "stump" in s.lower() else "maybe"
+    return "likely" if ssid_says_stump(s) else "no"
 
 
 # ------------------------------------------------------------------ STUMP? (1.0.0-beta.21)

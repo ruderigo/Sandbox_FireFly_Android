@@ -405,4 +405,20 @@
     <string name="paper_duplicate">Este mensaje en papel ya se leyó.</string>
     <string name="paper_not_for_you">Este mensaje en papel es para otra persona: solo su destinatario puede leerlo.</string>
     <string name="paper_bad">Este mensaje en papel no se puede leer: puede estar dañado o incompleto.</string>
+    <string name="find_popup_searching">Buscando en este Wi-Fi…</string>
+    <string name="find_popup_sweeping">Buscando también Troncos más antiguos en este Wi-Fi…</string>
+    <string name="find_popup_none">No hay Troncos nuevos en este Wi-Fi.</string>
+    <string name="find_popup_not_wifi">Sin Wi-Fi: no hay Troncos que buscar aquí.</string>
+    <string name="find_select_all">Seleccionar todo</string>
+    <string name="find_deselect_all">Deseleccionar todo</string>
+    <string name="find_popup_add">Añadir (%1$d)</string>
+    <string name="find_popup_added">Añadidos a tus Troncos: %1$d</string>
+    <string name="find_popup_hotspots">Puntos de acceso de Troncos cercanos</string>
+    <string name="find_popup_scanning">Buscando puntos de acceso…</string>
+    <string name="find_popup_hotspots_none">Ningún punto de acceso de Tronco cerca.</string>
+    <string name="find_popup_hotspots_permission">Permite que FireFly busque redes Wi-Fi para ver los puntos de acceso de Troncos cercanos.</string>
+    <string name="find_popup_allow">Permitir</string>
+    <string name="find_popup_joining">Conectando…</string>
+    <string name="find_popup_lora">Troncos oídos por LoRa: %1$d, ya en tu lista.</string>
+    <string name="find_popup_more">Más… (código QR, una dirección)</string>
 </resources>

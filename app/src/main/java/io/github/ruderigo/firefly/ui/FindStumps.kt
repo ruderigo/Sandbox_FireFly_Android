@@ -347,7 +347,7 @@ private fun Note(text: String, error: Boolean = false) {
 }
 
 @Composable
-private fun PasswordDialog(ssid: String, onDismiss: () -> Unit, onJoin: (String) -> Unit) {
+internal fun PasswordDialog(ssid: String, onDismiss: () -> Unit, onJoin: (String) -> Unit) {
     var pw by remember { mutableStateOf("") }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss, containerColor = Amber.Panel, shape = Large,

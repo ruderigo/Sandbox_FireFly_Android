@@ -405,4 +405,20 @@
     <string name="paper_duplicate">Ce message papier a déjà été lu.</string>
     <string name="paper_not_for_you">Ce message papier est pour quelqu’un d’autre : seul son destinataire peut le lire.</string>
     <string name="paper_bad">Ce message papier est illisible : il est peut-être abîmé ou incomplet.</string>
+    <string name="find_popup_searching">Recherche sur ce Wi-Fi…</string>
+    <string name="find_popup_sweeping">Recherche des Bûches plus anciennes sur ce Wi-Fi…</string>
+    <string name="find_popup_none">Aucune nouvelle Bûche sur ce Wi-Fi.</string>
+    <string name="find_popup_not_wifi">Pas de Wi-Fi : aucune Bûche à chercher ici.</string>
+    <string name="find_select_all">Tout sélectionner</string>
+    <string name="find_deselect_all">Tout désélectionner</string>
+    <string name="find_popup_add">Ajouter (%1$d)</string>
+    <string name="find_popup_added">Ajoutées à vos Bûches : %1$d</string>
+    <string name="find_popup_hotspots">Points d’accès de Bûches à proximité</string>
+    <string name="find_popup_scanning">Recherche des points d’accès…</string>
+    <string name="find_popup_hotspots_none">Aucun point d’accès de Bûche à proximité.</string>
+    <string name="find_popup_hotspots_permission">Autorisez FireFly à scanner le Wi-Fi pour voir les points d’accès de Bûches à proximité.</string>
+    <string name="find_popup_allow">Autoriser</string>
+    <string name="find_popup_joining">Connexion…</string>
+    <string name="find_popup_lora">Bûches entendues en LoRa : %1$d, déjà dans votre liste.</string>
+    <string name="find_popup_more">Plus… (code QR, une adresse)</string>
 </resources>

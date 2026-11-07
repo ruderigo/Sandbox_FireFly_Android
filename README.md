@@ -14,6 +14,26 @@ Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
+### Next build (in progress): find several Stumps at once
+- **Find Stumps** (the button in the Stumps list) opens a popup that looks
+  and waits while it looks: the Stumps on this Wi-Fi that aren't in your list
+  yet (STUMP?, about a second, then the sweep for older ones, 5-15 s), each
+  with a checkbox (unticked), **Select all** / **Deselect all**, and
+  **Add (n)**: the ticked ones join your list at once, none opened (each
+  greets itself with /hello as usual). Stumps already in the list aren't
+  repeated.
+- **Stump hotspots nearby** are listed under them, one **Join** each (the
+  phone moves to that Wi-Fi, and the search runs again there).
+- Over LoRa, Stumps are added by themselves; the popup says how many.
+- **More…** opens the full Find Stumps page (QR code, an address).
+- Hotspots count as a Stump's when their name says **labuche**, **stump** or
+  **tronco**, whatever the capitals, accents, spaces, dashes or dots ("La
+  Bûche", "LABUCHE_2", "Tronco del parque", "LaBucheStump2"), or when joined
+  as a Stump before. Other networks aren't listed any more (they were, as
+  "maybe"), here and on the Find Stumps page.
+- Pull down in the Stumps list still only refreshes who's online.
+- Tests: run_find_popup; run_discovery (the names).
+
 ### 0.6.0-beta.53: each language names the Stump its own way; every LXMF app's QR code (Stump 1.0.0-beta.53)
 - French says **la Bûche** (les Bûches), Spanish **el Tronco** (los Troncos),
   English keeps **the Stump**, on every screen, the Stumps tab included
