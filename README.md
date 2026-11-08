@@ -35,6 +35,13 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - **Network tab:** "Stump over Wi-Fi" removed; the **radio channel** is now
   part of the LoRa radio box (saved, then confirmed by the RNode, in place),
   with **Announcing** right under it.
+- **Settings › Identity › Share:** your address as a QR code, in the format
+  each family of LXMF apps reads: **Sideband / NomadNet** (the default: the
+  bare address, also Skywave and any LXMF app), **Columba / MeshChatX**
+  (`lxma://<address>:<public key>`, also the T-Deck messenger, FireFly and
+  Stumps: they can write to you at once, before your announce) and **Link**
+  (`lxmf://<address>`). Under it: the address in groups of four (NomadNet
+  can't scan: it's typed), Copy, and Android's Share. Test: run_share_codes.
 - **Settings:** "Find peers on this Wi-Fi" removed (it stays as it was, on by
   default); the radio channel and Announcing moved to the Network tab;
   *Advanced › On this network* now reads "Scans the local network for

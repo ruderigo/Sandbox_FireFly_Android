@@ -842,6 +842,22 @@ def stump_lora_link(key):
 
 
 # ------------------------------------------------------------------ identity
+def share_codes():
+    """Settings › Identity › Share: what FireFly's own QR code can hold, one per family of apps.
+    "bare": the 32-character address (Sideband, NomadNet, Skywave, any LXMF app);
+    "lxma": lxma://<address>:<public key hex> (Columba, MeshChatX, the T-Deck messenger, FireFly,
+    Stumps: the key makes FireFly reachable at once); "link": lxmf://<address>.
+    The key is checked against the address first, as FireFly checks the codes it scans."""
+    from . import stump
+    c = _need()
+    address = c.local.hash.hex()
+    key = c.identity.get_public_key()
+    if stump.identity_for(address, key) is None:          # never: but never show a code that lies
+        return _j({"address": address, "bare": address, "link": f"lxmf://{address}", "lxma": None})
+    return _j({"address": address, "bare": address, "link": f"lxmf://{address}",
+               "lxma": f"lxma://{address}:{key.hex()}", "name": c.settings.get("display_name") or ""})
+
+
 def identity_export():
     """The 64-byte private key, for the app to write where the user chooses."""
     return bytes(_need().export_identity())

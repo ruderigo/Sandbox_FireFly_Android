@@ -432,4 +432,15 @@
     <string name="settings_advanced">Avanzado</string>
     <string name="hotspots_location_off">Android no muestra redes Wi-Fi mientras la Ubicación del teléfono está desactivada.</string>
     <string name="hotspots_location_on">Activar</string>
+    <string name="share_button">Compartir</string>
+    <string name="share_title">Tu dirección</string>
+    <string name="share_fmt_sideband">Sideband / NomadNet</string>
+    <string name="share_fmt_columba">Columba / MeshChatX</string>
+    <string name="share_fmt_link">Enlace</string>
+    <string name="share_for_sideband">Para Sideband, NomadNet, Skywave y cualquier app LXMF: solo la dirección.</string>
+    <string name="share_for_columba">Para Columba, MeshChatX, la mensajería T-Deck, FireFly y los Troncos: con tu clave, pueden escribirte enseguida.</string>
+    <string name="share_for_link">Un enlace lxmf://: tocado en un teléfono, abre una app LXMF.</string>
+    <string name="share_copy">Copiar</string>
+    <string name="share_send">Compartir…</string>
+    <string name="share_copied">Copiado</string>
 </resources>

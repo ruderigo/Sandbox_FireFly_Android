@@ -227,8 +227,12 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
             // ---------------------------------------------------------- Identity (actions)
             Section(stringResource(R.string.identity)) {
                 Text(stringResource(R.string.identity_help), style = MaterialTheme.typography.bodyMedium)
+                var sharing by remember { mutableStateOf(false) }
+                if (sharing) ShareIdentityPopup(onDismiss = { sharing = false })
                 Row(Modifier.padding(top = 10.dp)) {
-                    Button(stringResource(R.string.backup_identity)) { export.launch("firefly-identity") }
+                    Button(stringResource(R.string.share_button)) { sharing = true }
+                    Spacer(Modifier.width(8.dp))
+                    Button(stringResource(R.string.backup_identity), primary = false) { export.launch("firefly-identity") }
                     Spacer(Modifier.width(8.dp))
                     Button(stringResource(R.string.restore_identity), primary = false) { import.launch(arrayOf("*/*")) }
                 }

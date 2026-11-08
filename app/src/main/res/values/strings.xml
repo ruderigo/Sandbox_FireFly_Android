@@ -432,4 +432,15 @@
     <string name="settings_advanced">Advanced</string>
     <string name="hotspots_location_off">Android shows no Wi-Fi networks while the phone\'s Location is off.</string>
     <string name="hotspots_location_on">Turn on</string>
+    <string name="share_button">Share</string>
+    <string name="share_title">Your address</string>
+    <string name="share_fmt_sideband">Sideband / NomadNet</string>
+    <string name="share_fmt_columba">Columba / MeshChatX</string>
+    <string name="share_fmt_link">Link</string>
+    <string name="share_for_sideband">For Sideband, NomadNet, Skywave and any LXMF app: the address alone.</string>
+    <string name="share_for_columba">For Columba, MeshChatX, the T-Deck messenger, FireFly and Stumps: with your key, they can write to you at once.</string>
+    <string name="share_for_link">An lxmf:// link: tapped on a phone, it opens an LXMF app.</string>
+    <string name="share_copy">Copy</string>
+    <string name="share_send">Share…</string>
+    <string name="share_copied">Copied</string>
 </resources>
