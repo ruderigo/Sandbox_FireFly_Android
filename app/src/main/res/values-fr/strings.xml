@@ -448,4 +448,7 @@
     <string name="announce_now_help">Signale au réseau que vous êtes là maintenant, avec votre nom, sans attendre la prochaine annonce.</string>
     <string name="prop_switch">Utiliser un nœud de propagation</string>
     <string name="prop_switch_help">Activé : FireFly en choisit un lui-même (ou utilise celui que vous avez choisi), y récupère vos messages et y laisse les messages pour les personnes hors de portée.</string>
+    <string name="other_links_help">D’autres façons pour FireFly de joindre le réseau Reticulum, en plus de la LoRa et du Wi-Fi local. Laissez vide si vous n’en avez pas besoin.</string>
+    <string name="tcp_peers_help">Un hub Reticulum sur Internet ou sur votre réseau, sous la forme hôte:port (souvent le port 4242). FireFly s’y connecte et joint tous ceux qui y sont reliés.</string>
+    <string name="wifi_rnodes_help">Un RNode sur votre Wi-Fi plutôt que branché ou appairé en Bluetooth : son adresse sur le réseau.</string>
 </resources>

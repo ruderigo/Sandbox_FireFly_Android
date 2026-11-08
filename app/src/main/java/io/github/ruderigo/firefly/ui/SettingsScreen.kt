@@ -224,8 +224,11 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
             val tcpValid = lines(tcp).all { l -> l.substringAfterLast(':', "").toIntOrNull()?.let { it in 1..65535 } == true &&
                 l.substringBeforeLast(':').isNotBlank() }
             Section(stringResource(R.string.other_links)) {
+                Text(stringResource(R.string.other_links_help), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp))
                 Labeled(stringResource(R.string.tcp_peers)) { Field(tcp, { tcp = it }, Modifier.fillMaxWidth(), hint = "host:4242", singleLine = false, mono = true) }
+                Text(stringResource(R.string.tcp_peers_help), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(bottom = 6.dp))
                 Labeled(stringResource(R.string.wifi_rnodes)) { Field(hosts, { hosts = it }, Modifier.fillMaxWidth(), hint = "10.0.0.50", singleLine = false, mono = true) }
+                Text(stringResource(R.string.wifi_rnodes_help), style = MaterialTheme.typography.labelSmall)
                 SaveRow(dirty = lines(tcp) != lines(savedTcp) || lines(hosts) != lines(savedHosts),
                     valid = tcpValid, problem = R.string.tcp_invalid,
                     onDiscard = { tcp = savedTcp; hosts = savedHosts }) {
