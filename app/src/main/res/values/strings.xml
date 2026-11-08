@@ -295,7 +295,7 @@
     <string name="find_password_help">This hotspot has a password. It\'s used for this connection only.</string>
     <string name="find_password_hint">Wi-Fi password</string>
     <string name="find_lan">On this network</string>
-    <string name="find_lan_help">Stumps on the same Wi-Fi as you (%1$s): FireFly asks the network who\'s a Stump, by name, whatever address the router gave it. A few seconds.</string>
+    <string name="find_lan_help">Scans the local network for connected Stumps and their details.</string>
     <string name="find_lan_search">Search this network</string>
     <string name="find_lan_searching">Searching…</string>
     <string name="find_lan_none">No other Stump on this network.</string>
@@ -430,4 +430,6 @@
     <string name="hotspot_rescan">Scan again</string>
     <string name="close">Close</string>
     <string name="settings_advanced">Advanced</string>
+    <string name="hotspots_location_off">Android shows no Wi-Fi networks while the phone\'s Location is off.</string>
+    <string name="hotspots_location_on">Turn on</string>
 </resources>

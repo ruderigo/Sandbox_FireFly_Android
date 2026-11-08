@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-private val BANDWIDTHS = listOf(62_500, 125_000, 250_000, 500_000)
+internal val BANDWIDTHS = listOf(62_500, 125_000, 250_000, 500_000)
 
 /**
  * One rule for every section:
@@ -66,29 +66,6 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
     }
     fun commitSettings(patch: JSONObject, okText: String = ctx.getString(R.string.settings_saved)) =
         commit(okText, "settings_set", patch.toString())
-
-    // A new radio channel is "done" only when the RNode itself reports it: saved, then
-    // "retuning…", then the RNode's answer (confirmed, what it reports instead, or none).
-    var retuneTo by remember { mutableStateOf<Long?>(null) }          // the frequency asked (Hz)
-    LaunchedEffect(retuneTo) {
-        val want = retuneTo ?: return@LaunchedEffect
-        val started = System.currentTimeMillis() / 1000.0
-        val end = System.currentTimeMillis() + 45_000
-        while (System.currentTimeMillis() < end) {
-            delay(500)
-            val r = Engine.status.value.optJSONObject("radio") ?: continue
-            val st = r.optString("state")
-            val fresh = r.optDouble("since", 0.0) >= started - 1          // happened after this save
-            if (st == "connecting" || r.optBoolean("busy")) continue
-            if (st == "online" && r.optBoolean("confirmed") && Math.abs(r.optLong("frequency") - want) <= 100) {
-                show(ctx.getString(R.string.radio_confirmed, "%.3f".format(want / 1e6)), ok = true); retuneTo = null; return@LaunchedEffect
-            }
-            if (st == "refused" && fresh) { show(r.optString("detail"), ok = false); retuneTo = null; return@LaunchedEffect }
-            if (st in listOf("off", "no devices")) { show(ctx.getString(R.string.radio_saved_no_rnode), ok = true); retuneTo = null; return@LaunchedEffect }
-        }
-        show(ctx.getString(R.string.radio_not_confirmed), ok = false)
-        retuneTo = null
-    }
 
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null) scope.launch(Dispatchers.IO) {
@@ -139,63 +116,6 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
                 }
                 Toggle(stringResource(R.string.keep_awake), radio.optBoolean("keep_awake", true)) {
                     commitSettings(JSONObject().put("radio", JSONObject().put("keep_awake", it)))
-                }
-            }
-
-            // ---------------------------------------------------------- Radio channel (Save)
-            val savedFreq = "%.3f".format(java.util.Locale.ROOT, radio.optLong("frequency") / 1e6)
-            val savedBw = radio.optInt("bandwidth")
-            val savedSf = radio.optInt("spreading_factor").toString()
-            val savedCr = radio.optInt("coding_rate").toString()
-            val savedTxp = radio.optInt("tx_power").toString()
-            var freq by remember(s) { mutableStateOf(savedFreq) }
-            var bw by remember(s) { mutableIntStateOf(savedBw) }
-            var sf by remember(s) { mutableStateOf(savedSf) }
-            var cr by remember(s) { mutableStateOf(savedCr) }
-            var txp by remember(s) { mutableStateOf(savedTxp) }
-            val f = freq.replace(',', '.').toDoubleOrNull()
-            val radioValid = f != null && f in 137.0..1020.0 && (sf.toIntOrNull() ?: 0) in 5..12 &&
-                (cr.toIntOrNull() ?: 0) in 5..8 && (txp.toIntOrNull() ?: -1) in 0..22
-            val radioDirty = freq.replace(',', '.').toDoubleOrNull()?.let { "%.3f".format(java.util.Locale.ROOT, it) } != savedFreq ||
-                bw != savedBw || sf != savedSf || cr != savedCr || txp != savedTxp
-            Section(stringResource(R.string.radio_channel)) {
-                Text(stringResource(R.string.radio_match_warning), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp))
-                Labeled(stringResource(R.string.frequency_mhz)) { Field(freq, { freq = it }, Modifier.fillMaxWidth(), mono = true, number = true) }
-                Labeled(stringResource(R.string.bandwidth)) {
-                    Row(Modifier.fillMaxWidth()) { BANDWIDTHS.forEach { b -> Chip("${b / 1000}", b == bw) { bw = b } } }
-                }
-                Row {
-                    Labeled("SF", Modifier.weight(1f)) { Field(sf, { sf = it }, Modifier.fillMaxWidth(), mono = true, number = true) }
-                    Spacer(Modifier.width(8.dp))
-                    Labeled("CR 4/", Modifier.weight(1f)) { Field(cr, { cr = it }, Modifier.fillMaxWidth(), mono = true, number = true) }
-                    Spacer(Modifier.width(8.dp))
-                    Labeled("dBm", Modifier.weight(1f)) { Field(txp, { txp = it }, Modifier.fillMaxWidth(), mono = true, number = true) }
-                }
-                Text(stringResource(R.string.stump_defaults_fill), modifier = Modifier.padding(top = 6.dp).clip(Small)
-                    .clickable { freq = "915.000"; bw = 125_000; sf = "8"; cr = "5"; txp = "7" }.padding(vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
-                OnAir(status)
-                SaveRow(dirty = radioDirty, valid = radioValid, problem = R.string.radio_invalid,
-                    onDiscard = { freq = savedFreq; bw = savedBw; sf = savedSf; cr = savedCr; txp = savedTxp }) {
-                    commitSettings(JSONObject().put("radio", JSONObject()
-                        .put("frequency", Math.round((f ?: 915.0) * 1e6)).put("bandwidth", bw)
-                        .put("spreading_factor", sf.toInt()).put("coding_rate", cr.toInt()).put("tx_power", txp.toInt())),
-                        ctx.getString(R.string.radio_retuning))
-                    retuneTo = Math.round((f ?: 915.0) * 1e6)
-                }
-            }
-
-            // ---------------------------------------------------------- Announcing (Save)
-            val savedAnnounce = s.optInt("announce_interval_min").toString()
-            var announce by remember(s) { mutableStateOf(savedAnnounce) }
-            Section(stringResource(R.string.announcing)) {
-                Labeled(stringResource(R.string.announce_every)) {
-                    Field(announce, { announce = it }, Modifier.width(100.dp), mono = true, number = true)
-                }
-                Text(stringResource(R.string.announce_help), style = MaterialTheme.typography.bodySmall)
-                SaveRow(dirty = announce != savedAnnounce, valid = (announce.toIntOrNull() ?: -1) in 0..1440,
-                    problem = R.string.announce_invalid, onDiscard = { announce = savedAnnounce }) {
-                    commitSettings(JSONObject().put("announce_interval_min", announce.toInt()))
                 }
             }
 
@@ -253,23 +173,20 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
             }
 
             // ---------------------------------------------------------- Other links (Save)
-            val savedAuto = s.optBoolean("auto_interface")
             val savedTcp = (s.optJSONArray("tcp_peers") ?: JSONArray()).strings().joinToString("\n")
             val savedHosts = (s.optJSONArray("rnode_hosts") ?: JSONArray()).strings().joinToString("\n")
-            var auto by remember(s) { mutableStateOf(savedAuto) }
             var tcp by remember(s) { mutableStateOf(savedTcp) }
             var hosts by remember(s) { mutableStateOf(savedHosts) }
             fun lines(t: String) = t.lines().map { it.trim() }.filter { it.isNotEmpty() }
             val tcpValid = lines(tcp).all { l -> l.substringAfterLast(':', "").toIntOrNull()?.let { it in 1..65535 } == true &&
                 l.substringBeforeLast(':').isNotBlank() }
             Section(stringResource(R.string.other_links)) {
-                Toggle(stringResource(R.string.auto_interface), auto) { auto = it }
                 Labeled(stringResource(R.string.tcp_peers)) { Field(tcp, { tcp = it }, Modifier.fillMaxWidth(), hint = "host:4242", singleLine = false, mono = true) }
                 Labeled(stringResource(R.string.wifi_rnodes)) { Field(hosts, { hosts = it }, Modifier.fillMaxWidth(), hint = "10.0.0.50", singleLine = false, mono = true) }
-                SaveRow(dirty = auto != savedAuto || lines(tcp) != lines(savedTcp) || lines(hosts) != lines(savedHosts),
+                SaveRow(dirty = lines(tcp) != lines(savedTcp) || lines(hosts) != lines(savedHosts),
                     valid = tcpValid, problem = R.string.tcp_invalid,
-                    onDiscard = { auto = savedAuto; tcp = savedTcp; hosts = savedHosts }) {
-                    commitSettings(JSONObject().put("auto_interface", auto)
+                    onDiscard = { tcp = savedTcp; hosts = savedHosts }) {
+                    commitSettings(JSONObject()
                         .put("tcp_peers", JSONArray(lines(tcp))).put("rnode_hosts", JSONArray(lines(hosts))),
                         ctx.getString(R.string.settings_saved_links))
                 }
@@ -332,7 +249,7 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
         }
 
         // The confirmation: same place, same look, for every change.
-        LaunchedEffect(bannerId) { if (banner != null) { delay(if (retuneTo != null) 45_000 else 3500); banner = null } }
+        LaunchedEffect(bannerId) { if (banner != null) { delay(3500); banner = null } }
         AnimatedVisibility(visible = banner != null, enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
             val (text, ok) = banner ?: ("" to true)
@@ -348,7 +265,7 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
  * changed and is valid) and Discard (only when something changed).
  */
 @Composable
-private fun SaveRow(dirty: Boolean, valid: Boolean, problem: Int, onDiscard: () -> Unit, onSave: () -> Unit) {
+internal fun SaveRow(dirty: Boolean, valid: Boolean, problem: Int, onDiscard: () -> Unit, onSave: () -> Unit) {
     if (dirty && !valid) Text(stringResource(problem), style = MaterialTheme.typography.bodySmall.copy(color = Amber.Error),
         modifier = Modifier.padding(top = 8.dp))
     Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -366,7 +283,7 @@ private fun SaveRow(dirty: Boolean, valid: Boolean, problem: Int, onDiscard: () 
  * Shows "applying" during the retune, and the RNode's reason if it refuses.
  */
 @Composable
-private fun OnAir(status: JSONObject) {
+internal fun OnAir(status: JSONObject) {
     val r = status.optJSONObject("radio") ?: JSONObject()
     val want = status.optJSONObject("radio_wanted") ?: JSONObject()
     val state = r.optString("state")
@@ -400,7 +317,7 @@ private fun Toggle(label: String, on: Boolean, set: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(label, modifier = Modifier.padding(end = 6.dp).clip(Small).border(1.dp, if (selected) Amber.Ember else Amber.Border, Small)
         .background(if (selected) Amber.Ember.copy(alpha = 0.15f) else Amber.Panel).clickable(onClick = onClick)
         .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -408,7 +325,7 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Labeled(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+internal fun Labeled(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(modifier.padding(vertical = 4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 4.dp))
         content()

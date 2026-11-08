@@ -20,8 +20,11 @@
     <!-- Bluetooth LE RNodes -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <!-- BLE scans up to Android 11, Wi-Fi scans (Find Stumps) up to Android 12 -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
+    <!-- BLE scans up to Android 11 (later: BLUETOOTH_SCAN, never for location), and Wi-Fi scans for
+         Stump hotspots on every Android: startScan/getScanResults need precise location, even on 13+
+         (NEARBY_WIFI_DEVICES doesn't cover them). Asked only when hotspots are looked for. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" tools:targetApi="s" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />

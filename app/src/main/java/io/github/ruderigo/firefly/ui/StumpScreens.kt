@@ -131,68 +131,6 @@ fun StumpsScreen(go: (Route) -> Unit) {
 }
 
 
-/**
- * Open a Stump by its address (in the Network tab). The gateway is offered only when it
- * really is a Stump (its own hotspot, 192.168.n.1 along a chain): on home Wi-Fi it's the
- * router. Connect asks /node.json before opening anything.
- */
-@Composable
-fun StumpOverWifi(go: (Route) -> Unit) {
-    val settings = engineData(JSONObject()) { Engine.obj("settings_get") }
-    val gateway by WifiHttp.gateway.collectAsState()
-    // Asked (/node.json) before it's offered: null while asking, then the answer.
-    var gwProbe by remember(gateway) { mutableStateOf<JSONObject?>(null) }
-    LaunchedEffect(gateway) { gateway?.let { gwProbe = Engine.obj("discover_probe", "http://$it") } }
-    val gwStump = gwProbe?.takeIf { it.optBoolean("stump") }
-    var url by remember(settings, gwStump) {
-        mutableStateOf(gwStump?.optString("base") ?: settings.optString("stump_wifi_default", "http://192.168.4.1"))
-    }
-    var connecting by remember { mutableStateOf(false) }
-    var connectError by remember { mutableStateOf<String?>(null) }
-    var searching by remember { mutableStateOf(false) }
-    if (searching) FindStumpsPopup(onDismiss = { searching = false })
-    val scope = rememberCoroutineScope()
-    Section(stringResource(R.string.join_wifi)) {
-        Text(stringResource(R.string.join_wifi_help), style = MaterialTheme.typography.bodySmall)
-        gateway?.let { gw ->
-            val p = gwProbe
-            Text(when {
-                p == null -> stringResource(R.string.find_checking, gw)
-                p.optBoolean("stump") -> stringResource(R.string.join_wifi_gateway_stump,
-                    p.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: stringResource(R.string.find_tag_yes), gw)
-                else -> stringResource(R.string.join_wifi_gateway_router, gw)
-            }, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
-        }
-        Spacer(Modifier.height(8.dp))
-        Field(url, { url = it; connectError = null }, Modifier.fillMaxWidth(), mono = true)
-        connectError?.let {
-            Text(it, style = MaterialTheme.typography.labelSmall.copy(color = Amber.Error), modifier = Modifier.padding(top = 4.dp))
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Button(stringResource(if (connecting) R.string.connect_checking else R.string.connect), enabled = !connecting) {
-                val u = url
-                connecting = true; connectError = null
-                scope.launch {
-                    val r = Engine.obj("stump_connect_checked", u)
-                    connecting = false
-                    val k = r.optString("key")
-                    if (k.isNotBlank() && k != "null") {
-                        go(Route.Node(k))
-                    } else {
-                        connectError = r.optString("error").takeIf { it.isNotBlank() && it != "null" }
-                            ?.let { why -> "${r.optString("base", u)}: $why" }
-                    }
-                }
-            }
-            if (connectError != null) {
-                Spacer(Modifier.width(8.dp))
-                Button(stringResource(R.string.find_stumps), primary = false) { searching = true }
-            }
-        }
-    }
-}
-
 @Composable
 fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
     // A Wi-Fi Stump the router moved is found again by its identity: the screen follows it.

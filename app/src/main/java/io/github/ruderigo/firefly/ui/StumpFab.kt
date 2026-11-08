@@ -154,10 +154,21 @@ fun HotspotsPopup(onDismiss: () -> Unit, onSearch: () -> Unit) {
             scanning = false
         }
     }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) runScan() else list = emptyList()
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (WifiDiscovery.canScan(ctx)) runScan() else list = emptyList()
     }
-    LaunchedEffect(Unit) { if (WifiDiscovery.canScan(ctx)) runScan() }
+    // Location off: Android gives no scan results at all. Looked at again while the popup is
+    // open (the user switches it on in the system's settings and comes back): then it scans.
+    var locationOn by remember { mutableStateOf(WifiDiscovery.locationOn(ctx)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1500)
+            val now = WifiDiscovery.locationOn(ctx)
+            if (now && !locationOn && WifiDiscovery.canScan(ctx)) runScan()
+            locationOn = now
+        }
+    }
+    LaunchedEffect(Unit) { if (WifiDiscovery.canScan(ctx) && locationOn) runScan() }
 
     // Joined: once its gateway is known, is a Stump there? Then remember the hotspot and add it.
     LaunchedEffect(joined.state, gateway) {
@@ -193,9 +204,15 @@ fun HotspotsPopup(onDismiss: () -> Unit, onSearch: () -> Unit) {
                 item {
                     val l = list
                     when {
-                        !WifiDiscovery.canScan(ctx) && l == null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        !WifiDiscovery.canScan(ctx) -> Row(verticalAlignment = Alignment.CenterVertically) {
                             Hint(stringResource(R.string.find_popup_hotspots_permission), Modifier.weight(1f))
-                            TextLink(stringResource(R.string.find_popup_allow)) { permission.launch(WifiDiscovery.scanPermission()) }
+                            TextLink(stringResource(R.string.find_popup_allow)) { permission.launch(WifiDiscovery.scanPermissions()) }
+                        }
+                        !locationOn -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            Hint(stringResource(R.string.hotspots_location_off), Modifier.weight(1f))
+                            TextLink(stringResource(R.string.hotspots_location_on)) {
+                                ctx.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }
                         }
                         scanning || l == null -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                             androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = Amber.Ember, strokeWidth = 2.dp)
@@ -221,7 +238,7 @@ fun HotspotsPopup(onDismiss: () -> Unit, onSearch: () -> Unit) {
                         notStump != null -> Note(stringResource(R.string.hotspot_not_stump, notStump ?: ""), error = true)
                     }
                 }
-                if (list != null && !scanning) item {
+                if (list != null && !scanning && locationOn && WifiDiscovery.canScan(ctx)) item {
                     TextLink(stringResource(R.string.hotspot_rescan)) { runScan() }
                 }
             }

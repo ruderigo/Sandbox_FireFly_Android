@@ -295,7 +295,7 @@
     <string name="find_password_help">Ce point d\'accès a un mot de passe. Il ne sert qu\'à cette connexion.</string>
     <string name="find_password_hint">Mot de passe Wi-Fi</string>
     <string name="find_lan">Sur ce réseau</string>
-    <string name="find_lan_help">Les Bûches sur le même Wi-Fi que vous (%1$s) : FireFly demande au réseau qui est une Bûche, par son nom, quelle que soit l\'adresse donnée par le routeur. Quelques secondes.</string>
+    <string name="find_lan_help">Analyse le réseau local à la recherche des Bûches connectées et de leurs détails.</string>
     <string name="find_lan_search">Chercher sur ce réseau</string>
     <string name="find_lan_searching">Recherche…</string>
     <string name="find_lan_none">Aucune autre Bûche sur ce réseau.</string>
@@ -430,4 +430,6 @@
     <string name="hotspot_rescan">Rechercher à nouveau</string>
     <string name="close">Fermer</string>
     <string name="settings_advanced">Avancé</string>
+    <string name="hotspots_location_off">Android n’affiche aucun réseau Wi-Fi tant que la Localisation du téléphone est désactivée.</string>
+    <string name="hotspots_location_on">Activer</string>
 </resources>

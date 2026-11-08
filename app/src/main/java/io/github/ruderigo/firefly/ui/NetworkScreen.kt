@@ -89,8 +89,11 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                     Spacer(Modifier.width(8.dp))
                     Button(stringResource(R.string.pair_ble), primary = false) { go(Route.Pair) }
                 }
+                // Its channel (moved here from Settings): saved, then confirmed by the RNode.
+                RadioChannelEditor()
             }
         }
+        item { AnnouncingSection() }
         if (usbWaiting.isNotEmpty()) item {
             Section(stringResource(R.string.usb_permission)) {
                 usbWaiting.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
@@ -128,7 +131,6 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                 }
             }
         }
-        item { StumpOverWifi(go) }         // a Stump by its address (moved here from the Stumps tab)
         item {
             Section(stringResource(R.string.you_on_network)) {
                 val addr = status.optString("address")

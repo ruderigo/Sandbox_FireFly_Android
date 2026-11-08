@@ -26,6 +26,19 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - The Find Stumps page is gone: adding by address and hotspots went to the
   + button; "This Wi-Fi" was removed; "On this network" (the sweep) and
   "Heard on LoRa" moved to **Settings › Advanced**.
+- **Hotspot scans work now.** Android needs *precise location* for a Wi-Fi
+  scan on every version, Android 13+ included ("Nearby devices" doesn't cover
+  scans): FireFly only asked for "Nearby devices" there, so every scan came
+  back empty. The hotspots popup now asks for location (only when it
+  scans), and says so when the phone's Location switch is off (Android
+  returns no networks then), with a button to turn it on.
+- **Network tab:** "Stump over Wi-Fi" removed; the **radio channel** is now
+  part of the LoRa radio box (saved, then confirmed by the RNode, in place),
+  with **Announcing** right under it.
+- **Settings:** "Find peers on this Wi-Fi" removed (it stays as it was, on by
+  default); the radio channel and Announcing moved to the Network tab;
+  *Advanced › On this network* now reads "Scans the local network for
+  connected Stumps and their details."
 
 ### 0.6.1-beta.57: find several Stumps at once (Stump 1.0.0-beta.57)
 - **Find Stumps** (the button in the Stumps list) opens a popup that looks

@@ -42,12 +42,25 @@ object WifiDiscovery {
     val joined: StateFlow<Joined> = _joined
     private var callback: ConnectivityManager.NetworkCallback? = null
 
-    /** The permission a scan needs: "Nearby devices" on Android 13+, location before. */
-    fun scanPermission(): String =
-        if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
+    /**
+     * What a scan needs: precise location, on every Android (startScan and getScanResults
+     * need it even on 13+, where "Nearby devices" doesn't cover them; Android 12+ asks for
+     * fine and coarse together). Before Nov 2026 only "Nearby devices" was asked on 13+, so
+     * every scan came back empty. Plus "Nearby devices" on 13+, for joining.
+     */
+    fun scanPermissions(): Array<String> =
+        if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
+        else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
 
     fun canScan(ctx: Context) =
-        ContextCompat.checkSelfPermission(ctx, scanPermission()) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    /** Android returns no scan results while the phone's Location is switched off. */
+    fun locationOn(ctx: Context): Boolean {
+        val lm = ctx.getSystemService(android.location.LocationManager::class.java) ?: return true
+        return androidx.core.location.LocationManagerCompat.isLocationEnabled(lm)
+    }
 
     /**
      * Scan, wait for fresh results (up to 10 s), and return them as JSON:
