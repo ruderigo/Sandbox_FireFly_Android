@@ -32,30 +32,22 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The Find Stumps button: a popup that looks, and waits while it looks.
- *  - Stumps on this Wi-Fi not in the list yet (STUMP?, about a second, then the sweep for
- *    older ones), each with a checkbox, unticked; Select all / Deselect all; Add puts the
- *    ticked ones in the list, none opened.
- *  - Stump hotspots nearby (their names say labuche, stump or tronco), one Join each: the phone
- *    moves to that Wi-Fi, and the search runs again there.
- *  - LoRa: those are added by themselves; how many.
- * More… opens the full Find Stumps page (QR code, an address).
+ * The + button › search (Nov 2026): the Stumps on this Wi-Fi not in the list yet (STUMP?,
+ * about a second, then the sweep for older ones), each with a checkbox, unticked; Select all /
+ * Deselect all; Add puts the ticked ones in the list, none opened. Over LoRa they're added
+ * by themselves: how many. Hotspots and adding by address are the + button's other two.
  */
 @Composable
-fun FindStumpsPopup(onDismiss: () -> Unit, onMore: () -> Unit) {
+fun FindStumpsPopup(onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val gateway by WifiHttp.gateway.collectAsState()
     val local by WifiHttp.local.collectAsState()
-    val joined by WifiDiscovery.joined.collectAsState()
 
     var found by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var ticked by remember { mutableStateOf(setOf<String>()) }
     var quickDone by remember { mutableStateOf(false) }
     var sweepDone by remember { mutableStateOf(false) }
-    var hotspots by remember { mutableStateOf<List<JSONObject>?>(null) }
-    var scanning by remember { mutableStateOf(false) }
-    var asking by remember { mutableStateOf<JSONObject?>(null) }
     var adding by remember { mutableStateOf(false) }
 
     fun keyOf(f: JSONObject) = f.optString("lxmf").takeIf { it.isNotBlank() && it != "null" } ?: f.optString("base")
@@ -77,29 +69,6 @@ fun FindStumpsPopup(onDismiss: () -> Unit, onMore: () -> Unit) {
         }.getOrDefault(emptyList()))
         sweepDone = true
     }
-
-    fun runScan() {
-        if (scanning) return
-        scanning = true
-        scope.launch {
-            val raw = WifiDiscovery.scan(ctx)
-            hotspots = runCatching { Engine.arr("discover_ssids", raw).objects() }.getOrDefault(emptyList())
-            scanning = false
-        }
-    }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) runScan() else hotspots = emptyList()
-    }
-    LaunchedEffect(Unit) { if (WifiDiscovery.canScan(ctx)) runScan() }
-
-    fun join(ap: JSONObject, password: String?) {
-        if (Build.VERSION.SDK_INT < 29) {
-            ctx.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return
-        }
-        WifiDiscovery.join(ctx, ap.optString("ssid"), password)
-    }
-    asking?.let { ap -> PasswordDialog(ap.optString("ssid"), onDismiss = { asking = null }) { pw -> asking = null; join(ap, pw) } }
 
     val lora = engineData(0) {
         Engine.arr("stump_nodes").objects().count { r ->
@@ -160,50 +129,10 @@ fun FindStumpsPopup(onDismiss: () -> Unit, onMore: () -> Unit) {
                     }
                 }
 
-                // ---- hotspots
-                item {
-                    Spacer(Modifier.height(12.dp))
-                    Text(stringResource(R.string.find_popup_hotspots), style = MaterialTheme.typography.labelLarge)
-                    val list = hotspots
-                    when {
-                        !WifiDiscovery.canScan(ctx) && list == null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            Hint(stringResource(R.string.find_popup_hotspots_permission), Modifier.weight(1f))
-                            TextLink(stringResource(R.string.find_popup_allow)) { permission.launch(WifiDiscovery.scanPermission()) }
-                        }
-                        scanning || list == null -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                            androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = Amber.Ember, strokeWidth = 2.dp)
-                            Spacer(Modifier.width(10.dp))
-                            Text(stringResource(R.string.find_popup_scanning), style = MaterialTheme.typography.bodySmall)
-                        }
-                        list.isEmpty() -> Hint(stringResource(R.string.find_popup_hotspots_none))
-                    }
-                }
-                items(hotspots ?: emptyList(), key = { "h" + it.optString("ssid") }) { ap ->
-                    val ssid = ap.optString("ssid")
-                    val here = joined.ssid == ssid && joined.state == WifiDiscovery.Join.JOINED
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Bars(if (ap.isNull("bars")) null else ap.optInt("bars"), Modifier.padding(end = 10.dp))
-                        Text((if (ap.optBoolean("secured")) "🔒 " else "") + ssid, style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        when {
-                            here -> Text("✓", style = MaterialTheme.typography.labelLarge.copy(color = Amber.Ember))
-                            joined.ssid == ssid && joined.state == WifiDiscovery.Join.ASKING ->
-                                Text(stringResource(R.string.find_popup_joining), style = MaterialTheme.typography.labelSmall)
-                            else -> TextLink(stringResource(R.string.find_join)) {
-                                if (ap.optBoolean("secured")) asking = ap else join(ap, null)
-                            }
-                        }
-                    }
-                }
-
                 // ---- LoRa
                 if (lora > 0) item {
                     Spacer(Modifier.height(12.dp))
                     Hint(stringResource(R.string.find_popup_lora, lora))
-                }
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    TextLink(stringResource(R.string.find_popup_more)) { onMore() }
                 }
             }
         },
@@ -220,10 +149,10 @@ fun FindStumpsPopup(onDismiss: () -> Unit, onMore: () -> Unit) {
 }
 
 @Composable
-private fun Hint(text: String, modifier: Modifier = Modifier) =
+internal fun Hint(text: String, modifier: Modifier = Modifier) =
     Text(text, style = MaterialTheme.typography.bodySmall, modifier = modifier.padding(vertical = 4.dp))
 
 @Composable
-private fun TextLink(text: String, onClick: () -> Unit) =
+internal fun TextLink(text: String, onClick: () -> Unit) =
     Text(text, modifier = Modifier.clip(Small).clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 6.dp),
         style = MaterialTheme.typography.labelLarge.copy(color = Amber.Ember))

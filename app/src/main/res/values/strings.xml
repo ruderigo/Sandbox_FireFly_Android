@@ -421,4 +421,13 @@
     <string name="find_popup_joining">Joining…</string>
     <string name="find_popup_lora">Stumps heard over LoRa: %1$d, already in your list.</string>
     <string name="find_popup_more">More… (QR code, an address)</string>
+    <string name="fab_open">Add Stumps</string>
+    <string name="fab_search">Search this Wi-Fi</string>
+    <string name="fab_add">Add by QR code or address</string>
+    <string name="fab_hotspots">Stump hotspots nearby</string>
+    <string name="hotspot_added">%1$s: its Stump is added to your list.</string>
+    <string name="hotspot_not_stump">%1$s: no Stump answers there.</string>
+    <string name="hotspot_rescan">Scan again</string>
+    <string name="close">Close</string>
+    <string name="settings_advanced">Advanced</string>
 </resources>

@@ -85,18 +85,12 @@ fun StumpsScreen(go: (Route) -> Unit) {
         onRemove = { removing = n; acting = null }) }
     removing?.let { n -> ConfirmRemoveStump(n.optString("name").ifBlank { n.optString("address") }, onDismiss = { removing = null }) {
         keysOf(n).forEach { Engine.fire("stump_remove", it) }; removing = null } }
-    // Find Stumps: a popup that looks on this Wi-Fi and nearby, and adds the ones ticked.
-    var finding by remember { mutableStateOf(false) }
-    if (finding) FindStumpsPopup(onDismiss = { finding = false }, onMore = { finding = false; go(Route.FindStumps) })
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshAll() },
         modifier = Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {     // room for the + button
         item {
-            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.stumps_intro), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                Spacer(Modifier.width(8.dp))
-                Button(stringResource(R.string.find_stumps)) { finding = true }
-            }
+            Text(stringResource(R.string.stumps_intro), style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(12.dp))
         }
         if (nodes.isEmpty()) item { Empty(stringResource(R.string.no_stumps)) }
         items(nodes, key = { it.optString("group").ifBlank { it.optString("key") } }) { n ->
@@ -131,6 +125,8 @@ fun StumpsScreen(go: (Route) -> Unit) {
                 style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
         }
     }
+    // Adding Stumps: the "+ 🪵" button, bottom right (search this Wi-Fi, add one, hotspots).
+    StumpFab()
     }
 }
 
@@ -153,6 +149,8 @@ fun StumpOverWifi(go: (Route) -> Unit) {
     }
     var connecting by remember { mutableStateOf(false) }
     var connectError by remember { mutableStateOf<String?>(null) }
+    var searching by remember { mutableStateOf(false) }
+    if (searching) FindStumpsPopup(onDismiss = { searching = false })
     val scope = rememberCoroutineScope()
     Section(stringResource(R.string.join_wifi)) {
         Text(stringResource(R.string.join_wifi_help), style = MaterialTheme.typography.bodySmall)
@@ -189,7 +187,7 @@ fun StumpOverWifi(go: (Route) -> Unit) {
             }
             if (connectError != null) {
                 Spacer(Modifier.width(8.dp))
-                Button(stringResource(R.string.find_stumps), primary = false) { go(Route.FindStumps) }
+                Button(stringResource(R.string.find_stumps), primary = false) { searching = true }
             }
         }
     }
@@ -299,6 +297,8 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             val alt = view.optString("wifi_alt").takeIf { it.isNotBlank() && it != "null" }
             // No radio: if this Stump answers on the Wi-Fi (STUMP?, by its identity), chat there.
             var looking by remember(key) { mutableStateOf(false) }
+            var searching by remember(key) { mutableStateOf(false) }
+            if (searching) FindStumpsPopup(onDismiss = { searching = false })
             fun lookOnWifi(thenFind: Boolean) {
                 if (looking) return
                 looking = true
@@ -306,7 +306,7 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
                     val r = Engine.obj("stump_find_wifi", key.substringAfter(":"))
                     looking = false
                     val k = r.optString("key").takeIf { it.isNotBlank() && it != "null" }
-                    if (k != null) go(Route.Node(k)) else if (thenFind) go(Route.FindStumps)
+                    if (k != null) go(Route.Node(k)) else if (thenFind) searching = true
                 }
             }
             LaunchedEffect(key, alt) { if (alt == null) lookOnWifi(thenFind = false) }

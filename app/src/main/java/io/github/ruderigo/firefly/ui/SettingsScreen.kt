@@ -45,7 +45,7 @@ private val BANDWIDTHS = listOf(62_500, 125_000, 250_000, 500_000)
  * has actually taken it (or saying it failed).
  */
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(go: (Route) -> Unit = {}) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     // Loaded on entry and after each save, never on unrelated activity
@@ -316,6 +316,11 @@ fun SettingsScreen() {
                     Button(stringResource(R.string.restore_identity), primary = false) { import.launch(arrayOf("*/*")) }
                 }
             }
+
+            // ---------------------------------------------------------- Advanced
+            Text(stringResource(R.string.settings_advanced), style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 12.dp, top = 20.dp, bottom = 4.dp))
+            AdvancedDiscovery(go)
 
             Section(stringResource(R.string.about)) {
                 Text(stringResource(R.string.about_text), style = MaterialTheme.typography.bodySmall)

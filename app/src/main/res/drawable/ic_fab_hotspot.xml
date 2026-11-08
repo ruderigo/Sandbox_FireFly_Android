@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original FireFly icon (MIT): a hotspot, an antenna on a stand sending waves. Tinted in code. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M12,10.5m-1.5,0a1.5,1.5 0,1 1,3 0a1.5,1.5 0,1 1,-3 0" android:fillColor="#FFFFFFFF"/>
+    <path android:pathData="M12,12V20M9,20H15" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.7"
+        android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M8.8,13.7A4.5,4.5 0,0 1,8.8 7.3M15.2,7.3A4.5,4.5 0,0 1,15.2 13.7" android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M6.2,16.3A8.2,8.2 0,0 1,6.2 4.7M17.8,4.7A8.2,8.2 0,0 1,17.8 16.3" android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6" android:strokeLineCap="round" android:fillColor="#00000000"/>
+</vector>

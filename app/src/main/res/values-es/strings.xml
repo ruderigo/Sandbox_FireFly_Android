@@ -421,4 +421,13 @@
     <string name="find_popup_joining">Conectando…</string>
     <string name="find_popup_lora">Troncos oídos por LoRa: %1$d, ya en tu lista.</string>
     <string name="find_popup_more">Más… (código QR, una dirección)</string>
+    <string name="fab_open">Añadir Troncos</string>
+    <string name="fab_search">Buscar en este Wi-Fi</string>
+    <string name="fab_add">Añadir por código QR o dirección</string>
+    <string name="fab_hotspots">Puntos de acceso de Troncos cercanos</string>
+    <string name="hotspot_added">%1$s: su Tronco se añadió a tu lista.</string>
+    <string name="hotspot_not_stump">%1$s: ningún Tronco responde ahí.</string>
+    <string name="hotspot_rescan">Buscar de nuevo</string>
+    <string name="close">Cerrar</string>
+    <string name="settings_advanced">Avanzado</string>
 </resources>

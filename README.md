@@ -14,6 +14,19 @@ Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
+### Next build (in progress): the "+ 🪵" button
+- The Stumps list's **Find Stumps** button is now a round **+ 🪵** button at
+  the bottom right, where the thumb is. Tapped, it opens three, icons only:
+  - **search** (radar): the popup that looks on this Wi-Fi, checkboxes,
+    Select all / Deselect all, Add (as in 0.6.1-beta.57, without hotspots);
+  - **+**: add one Stump by its QR code (Scan QR) or its address typed;
+  - **hotspot** (antenna): the Stump hotspots nearby, one Join each; a Stump
+    answering on the hotspot joined is added to the list, and Search looks
+    for more on that Wi-Fi.
+- The Find Stumps page is gone: adding by address and hotspots went to the
+  + button; "This Wi-Fi" was removed; "On this network" (the sweep) and
+  "Heard on LoRa" moved to **Settings › Advanced**.
+
 ### 0.6.1-beta.57: find several Stumps at once (Stump 1.0.0-beta.57)
 - **Find Stumps** (the button in the Stumps list) opens a popup that looks
   and waits while it looks: the Stumps on this Wi-Fi that aren't in your list
