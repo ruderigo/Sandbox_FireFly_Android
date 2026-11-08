@@ -443,4 +443,9 @@
     <string name="share_copy">Copiar</string>
     <string name="share_send">Compartir…</string>
     <string name="share_copied">Copiado</string>
+    <string name="profile">Perfil</string>
+    <string name="announced">Anunciado</string>
+    <string name="announce_now_help">Avisa a la red de que estás aquí ahora, con tu nombre, sin esperar al próximo anuncio.</string>
+    <string name="prop_switch">Usar un nodo de propagación</string>
+    <string name="prop_switch_help">Activado: FireFly elige uno por sí mismo (o usa el que elegiste), recoge allí tus mensajes y deja allí los mensajes para quienes están fuera de alcance.</string>
 </resources>

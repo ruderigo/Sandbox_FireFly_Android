@@ -233,6 +233,22 @@ def use_propagation_node(hex_or_auto):
     c.emit({"type": "status"})
 
 
+def propagation_set(on):
+    """Network › Propagation node, one switch (Nov 2026): On = use one, automatically (or keep the
+    node picked by hand), to collect messages and to leave them for people out of reach;
+    Off = neither. -> the mode now."""
+    c = _need()
+    if _flag(on):
+        if c.settings["propagation_mode"] != "manual":
+            c.settings.update({"propagation_mode": "auto", "propagation_node": None})
+            c._auto_pick_propagation()
+        c.settings.update({"fallback_to_propagation": True})
+    else:
+        c.settings.update({"propagation_mode": "off", "propagation_node": None, "fallback_to_propagation": False})
+    c.emit({"type": "status"})
+    return c.settings["propagation_mode"]
+
+
 def stump_defaults():
     from .settings import STUMP_RADIO
     return _j(STUMP_RADIO)

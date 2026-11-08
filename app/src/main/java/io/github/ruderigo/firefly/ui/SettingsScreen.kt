@@ -100,13 +100,34 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
             // ---------------------------------------------------------- Your name (Save)
             val savedName = s.optString("display_name")
             var name by remember(s) { mutableStateOf(savedName) }
-            Section(stringResource(R.string.your_name)) {
+            // Profile (Nov 2026): your name and your identity together, and announcing yourself.
+            Section(stringResource(R.string.profile)) {
+                Text(stringResource(R.string.your_name), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 6.dp))
                 Field(name, { name = it }, Modifier.fillMaxWidth())
                 Text(stringResource(R.string.your_name_help), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
                 SaveRow(dirty = name.trim() != savedName, valid = name.isNotBlank(), problem = R.string.name_invalid,
                     onDiscard = { name = savedName }) {
                     commitSettings(JSONObject().put("display_name", name.trim()), ctx.getString(R.string.settings_saved_name))
                 }
+                Text(stringResource(R.string.identity), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp))
+                Text(stringResource(R.string.identity_help), style = MaterialTheme.typography.bodyMedium)
+                // A problem the engine reports about you on the network (it was in Network's "You on the network").
+                status.optString("note").takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall.copy(color = Amber.Error), modifier = Modifier.padding(top = 6.dp))
+                }
+                var sharing by remember { mutableStateOf(false) }
+                if (sharing) ShareIdentityPopup(onDismiss = { sharing = false })
+                Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState())) {
+                    Button(stringResource(R.string.share_button)) { sharing = true }
+                    Spacer(Modifier.width(8.dp))
+                    Button(stringResource(R.string.backup_identity), primary = false) { export.launch("firefly-identity") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(stringResource(R.string.restore_identity), primary = false) { import.launch(arrayOf("*/*")) }
+                }
+                Button(stringResource(R.string.announce_now), primary = false, modifier = Modifier.padding(top = 10.dp)) {
+                    Engine.fire("announce"); show(ctx.getString(R.string.announced))
+                }
+                Text(stringResource(R.string.announce_now_help), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
             }
 
             // ---------------------------------------------------------- LoRa radio (instant)
@@ -116,20 +137,6 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
                 }
                 Toggle(stringResource(R.string.keep_awake), radio.optBoolean("keep_awake", true)) {
                     commitSettings(JSONObject().put("radio", JSONObject().put("keep_awake", it)))
-                }
-            }
-
-            // ---------------------------------------------------------- Offline messages (instant)
-            Section(stringResource(R.string.propagation)) {
-                Row {
-                    listOf("auto" to R.string.prop_auto, "off" to R.string.prop_off).forEach { (v, label) ->
-                        Chip(stringResource(label), s.optString("propagation_mode") == v) {
-                            commit(ctx.getString(R.string.settings_saved), "use_propagation_node", v)
-                        }
-                    }
-                }
-                Toggle(stringResource(R.string.fallback_prop), s.optBoolean("fallback_to_propagation")) {
-                    commitSettings(JSONObject().put("fallback_to_propagation", it))
                 }
             }
 
@@ -172,26 +179,6 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
                 Text(stringResource(R.string.voice_q_help), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
             }
 
-            // ---------------------------------------------------------- Other links (Save)
-            val savedTcp = (s.optJSONArray("tcp_peers") ?: JSONArray()).strings().joinToString("\n")
-            val savedHosts = (s.optJSONArray("rnode_hosts") ?: JSONArray()).strings().joinToString("\n")
-            var tcp by remember(s) { mutableStateOf(savedTcp) }
-            var hosts by remember(s) { mutableStateOf(savedHosts) }
-            fun lines(t: String) = t.lines().map { it.trim() }.filter { it.isNotEmpty() }
-            val tcpValid = lines(tcp).all { l -> l.substringAfterLast(':', "").toIntOrNull()?.let { it in 1..65535 } == true &&
-                l.substringBeforeLast(':').isNotBlank() }
-            Section(stringResource(R.string.other_links)) {
-                Labeled(stringResource(R.string.tcp_peers)) { Field(tcp, { tcp = it }, Modifier.fillMaxWidth(), hint = "host:4242", singleLine = false, mono = true) }
-                Labeled(stringResource(R.string.wifi_rnodes)) { Field(hosts, { hosts = it }, Modifier.fillMaxWidth(), hint = "10.0.0.50", singleLine = false, mono = true) }
-                SaveRow(dirty = lines(tcp) != lines(savedTcp) || lines(hosts) != lines(savedHosts),
-                    valid = tcpValid, problem = R.string.tcp_invalid,
-                    onDiscard = { tcp = savedTcp; hosts = savedHosts }) {
-                    commitSettings(JSONObject()
-                        .put("tcp_peers", JSONArray(lines(tcp))).put("rnode_hosts", JSONArray(lines(hosts))),
-                        ctx.getString(R.string.settings_saved_links))
-                }
-            }
-
             // ---------------------------------------------------------- Blocked people (actions)
             val blockedPeople by produceState(emptyList<JSONObject>(), reloadKey) {
                 value = Engine.arr("blocked").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
@@ -224,24 +211,30 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
                 Text(stringResource(R.string.blocked_help), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
             }
 
-            // ---------------------------------------------------------- Identity (actions)
-            Section(stringResource(R.string.identity)) {
-                Text(stringResource(R.string.identity_help), style = MaterialTheme.typography.bodyMedium)
-                var sharing by remember { mutableStateOf(false) }
-                if (sharing) ShareIdentityPopup(onDismiss = { sharing = false })
-                Row(Modifier.padding(top = 10.dp)) {
-                    Button(stringResource(R.string.share_button)) { sharing = true }
-                    Spacer(Modifier.width(8.dp))
-                    Button(stringResource(R.string.backup_identity), primary = false) { export.launch("firefly-identity") }
-                    Spacer(Modifier.width(8.dp))
-                    Button(stringResource(R.string.restore_identity), primary = false) { import.launch(arrayOf("*/*")) }
-                }
-            }
-
             // ---------------------------------------------------------- Advanced
             Text(stringResource(R.string.settings_advanced), style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 12.dp, top = 20.dp, bottom = 4.dp))
             AdvancedDiscovery(go)
+            // ---------------------------------------------------------- Other links (Save)
+            val savedTcp = (s.optJSONArray("tcp_peers") ?: JSONArray()).strings().joinToString("\n")
+            val savedHosts = (s.optJSONArray("rnode_hosts") ?: JSONArray()).strings().joinToString("\n")
+            var tcp by remember(s) { mutableStateOf(savedTcp) }
+            var hosts by remember(s) { mutableStateOf(savedHosts) }
+            fun lines(t: String) = t.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            val tcpValid = lines(tcp).all { l -> l.substringAfterLast(':', "").toIntOrNull()?.let { it in 1..65535 } == true &&
+                l.substringBeforeLast(':').isNotBlank() }
+            Section(stringResource(R.string.other_links)) {
+                Labeled(stringResource(R.string.tcp_peers)) { Field(tcp, { tcp = it }, Modifier.fillMaxWidth(), hint = "host:4242", singleLine = false, mono = true) }
+                Labeled(stringResource(R.string.wifi_rnodes)) { Field(hosts, { hosts = it }, Modifier.fillMaxWidth(), hint = "10.0.0.50", singleLine = false, mono = true) }
+                SaveRow(dirty = lines(tcp) != lines(savedTcp) || lines(hosts) != lines(savedHosts),
+                    valid = tcpValid, problem = R.string.tcp_invalid,
+                    onDiscard = { tcp = savedTcp; hosts = savedHosts }) {
+                    commitSettings(JSONObject()
+                        .put("tcp_peers", JSONArray(lines(tcp))).put("rnode_hosts", JSONArray(lines(hosts))),
+                        ctx.getString(R.string.settings_saved_links))
+                }
+            }
+
 
             Section(stringResource(R.string.about)) {
                 Text(stringResource(R.string.about_text), style = MaterialTheme.typography.bodySmall)
@@ -310,7 +303,7 @@ internal fun OnAir(status: JSONObject) {
 }
 
 @Composable
-private fun Toggle(label: String, on: Boolean, set: (Boolean) -> Unit) {
+internal fun Toggle(label: String, on: Boolean, set: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().clip(Small).clickable { set(!on) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         Box(Modifier.width(44.dp).height(24.dp).clip(Medium).background(if (on) Amber.Ember else Amber.Row)

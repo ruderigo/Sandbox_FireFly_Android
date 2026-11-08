@@ -35,6 +35,18 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - **Network tab:** "Stump over Wi-Fi" removed; the **radio channel** is now
   part of the LoRa radio box (saved, then confirmed by the RNode, in place),
   with **Announcing** right under it.
+- **Settings › Profile:** "Your name" and "Identity" together: your name,
+  your identity (Share, Back up, Restore), any warning about you on the
+  network, and **Announce now** (from the Network tab).
+- **Settings:** "Other links" (TCP peers, Wi-Fi RNodes) moved to
+  **Advanced**; the propagation settings moved to the Network tab.
+- **Network:** "You on the network" removed (Announce now and its warning went
+  to Profile; Share covers copying your address). **Propagation node** is one
+  **On / Off** switch: On = automatic (or the node picked by hand), collecting
+  your messages and leaving them for people out of reach (what "If someone is
+  unreachable…" did, now part of On); Off = neither. When On, the details
+  open under it (node, sync, Sync now, Choose a node). "Choose a node" keeps
+  Automatic and drops Off (the switch does it). Test: run_prop_switch.
 - **Settings › Identity › Share:** your address as a QR code, in the format
   each family of LXMF apps reads: **Sideband / NomadNet** (the default: the
   bare address, also Skywave and any LXMF app), **Columba / MeshChatX**

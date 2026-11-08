@@ -132,25 +132,17 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
             }
         }
         item {
-            Section(stringResource(R.string.you_on_network)) {
-                val addr = status.optString("address")
-                KeyValue(stringResource(R.string.lxmf_address), shortHash(addr))
-                KeyValue(stringResource(R.string.stump_nick), status.optString("stump_nick"))
-                status.optString("note").takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall.copy(color = Amber.Error), modifier = Modifier.padding(vertical = 4.dp))
-                }
-                Row(Modifier.padding(top = 8.dp)) {
-                    Button(stringResource(R.string.copy_address), primary = false) {
-                        ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("LXMF", addr))
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Button(stringResource(R.string.announce_now)) { Engine.fire("announce") }
+            val p = status.optJSONObject("propagation") ?: JSONObject()
+            // One switch (Nov 2026): On = automatic (or the node picked by hand), collecting your
+            // messages and leaving them for people out of reach; Off = neither. Details when on.
+            val on = p.optString("mode", "auto") != "off"
+            Section(stringResource(R.string.propagation)) {
+                Toggle(stringResource(R.string.prop_switch), on) { Engine.fire("propagation_set", it) }
+                Text(stringResource(R.string.prop_switch_help), style = MaterialTheme.typography.bodySmall)
+                androidx.compose.animation.AnimatedVisibility(on) {
+                    Column(Modifier.padding(top = 8.dp)) { PropagationSummary(p, go) }
                 }
             }
-        }
-        item {
-            val p = status.optJSONObject("propagation") ?: JSONObject()
-            Section(stringResource(R.string.propagation)) { PropagationSummary(p, go) }
         }
         item { Text(stringResource(R.string.interfaces), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(12.dp)) }
         items((status.optJSONArray("interfaces")?.objects() ?: emptyList())) { i ->
@@ -275,8 +267,6 @@ fun PropagationScreen(back: () -> Unit) {
             }
             item { ChoiceRow(stringResource(R.string.prop_mode_auto), stringResource(R.string.prop_auto_help), mode == "auto") {
                 Engine.fire("use_propagation_node", "auto") } }
-            item { ChoiceRow(stringResource(R.string.prop_mode_off), stringResource(R.string.prop_off_help), mode == "off") {
-                Engine.fire("use_propagation_node", "off") } }
             item { Text(stringResource(R.string.prop_heard), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(12.dp)) }
             if (nodes.isEmpty()) item { Empty(stringResource(R.string.prop_none_yet)) }
             items(nodes, key = { it.optString("hash") }) { n ->
