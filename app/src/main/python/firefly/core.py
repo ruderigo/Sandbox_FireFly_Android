@@ -291,26 +291,28 @@ class Core:
         # Which interfaces this announce could actually go out on.
         self.announced_on = {id(i) for i in list(RNS.Transport.interfaces) if getattr(i, "online", False)}
 
-    def _on_delivery_announce(self, dest_hash, identity, app_data):
+    def _on_delivery_announce(self, dest_hash, identity, app_data, fresh=True):
         if dest_hash == self.local.hash or dest_hash.hex() in self.blocked:
             return
         name = LXMF.display_name_from_app_data(app_data) if app_data else None
         hops = RNS.Transport.hops_to(dest_hash)
-        self.store.upsert_peer(dest_hash.hex(), "lxmf", name=name, hops=hops,
+        self.store.upsert_peer(dest_hash.hex(), "lxmf", name=name, hops=hops, heard=fresh,
                                stamp_cost=LXMF.stamp_cost_from_app_data(app_data) if app_data else None)
         h = dest_hash.hex()
         if identity and h not in self.stumps and h not in self._beacon_asked:
             # Asking is faster than waiting up to 30 minutes for the next beacon.
             self._beacon_asked.add(h)
             RNS.Transport.request_path(stump.beacon_hash_for(identity))
-        if h in self.stumps:
+        if h in self.stumps and fresh:
             self.store.upsert_stump_node(mesh_key(h), "mesh", h, last_seen=time.time())
 
     _beacon_asked = set()
 
-    def _on_stump_beacon(self, lxmf_hex, name, version, http=None, boot=None):
+    def _on_stump_beacon(self, lxmf_hex, name, version, http=None, boot=None, fresh=True):
+        """fresh: the beacon came from the Stump now (a relay's remembered copy isn't hearing
+        it: it doesn't make it online, and its old boot id isn't a restart)."""
         first = lxmf_hex not in self.stumps
-        if boot:
+        if boot and fresh:
             # Another boot id (Stump 1.0.0-beta.43): it restarted, and forgot who proved who
             # they are. Its sessions drop "verified" and, if in use, verify again.
             before = self.boots.get(lxmf_hex)
@@ -323,7 +325,10 @@ class Core:
         if first:
             threading.Thread(target=self._ask_stump_pn, args=(lxmf_hex,), daemon=True).start()
         self.store.upsert_peer(lxmf_hex, "lxmf", heard=False, stump=name, stump_ver=version)
-        self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name, last_seen=time.time())
+        if fresh:
+            self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name, last_seen=time.time())
+        else:
+            self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name)
 
     def stump_restarted(self, lxmf_hex):
         """A Stump beaconed a new boot id: it restarted. Over LoRa and Wi-Fi alike."""
@@ -500,7 +505,7 @@ class Core:
     def is_stump(self, peer_hex):
         return peer_hex in self.stumps
 
-    def _on_propagation_announce(self, dest_hash, app_data, identity=None):
+    def _on_propagation_announce(self, dest_hash, app_data, identity=None, fresh=True):
         if not LXMF.pn_announce_data_is_valid(app_data):
             return
         try:
@@ -517,7 +522,7 @@ class Core:
         stump = self._stump_on_identity(identity) if identity else None
         self.store.upsert_peer(dest_hash.hex(), "propagation", name=name or (stump or "Propagation node"),
                                hops=RNS.Transport.hops_to(dest_hash), extra=json.dumps(info),
-                               stamp_cost=info["stamp_cost"], stump=stump)
+                               stamp_cost=info["stamp_cost"], stump=stump, heard=fresh)
         if self.settings["propagation_mode"] == "auto" and info["enabled"]:
             self._auto_pick_propagation()
         self.emit({"type": "status"})
@@ -1444,17 +1449,35 @@ class _DeliveryAnnounces:
     aspect_filter = "lxmf.delivery"
     receive_path_responses = True
 
-    def __init__(self, core): self.core = core
+    ANNOUNCE_WINDOW_S = 10 * 60        # a Stump announces every 2 min (Core.MESH_ALIVE_S)
 
-    def received_announce(self, destination_hash, announced_identity, app_data):
-        self.core._on_delivery_announce(destination_hash, announced_identity, app_data)
+    def __init__(self, core):
+        self.core = core
+        self.seen = {}
+
+    def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None,
+                          is_path_response=False):
+        # Heard only if it came from its sender now: a relay's remembered copy (the answer to a
+        # path request, days later) doesn't make an offline Stump look online.
+        fresh = stump.fresh_announce(self.seen, destination_hash,
+                                     stump.announce_blob(destination_hash, announce_packet_hash),
+                                     is_path_response, self.ANNOUNCE_WINDOW_S)
+        self.core._on_delivery_announce(destination_hash, announced_identity, app_data, fresh=fresh)
 
 
 class _PropagationAnnounces:
     aspect_filter = "lxmf.propagation"
     receive_path_responses = True
 
-    def __init__(self, core): self.core = core
+    PN_WINDOW_S = 30 * 60
 
-    def received_announce(self, destination_hash, announced_identity, app_data):
-        self.core._on_propagation_announce(destination_hash, app_data, announced_identity)
+    def __init__(self, core):
+        self.core = core
+        self.seen = {}
+
+    def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None,
+                          is_path_response=False):
+        fresh = stump.fresh_announce(self.seen, destination_hash,
+                                     stump.announce_blob(destination_hash, announce_packet_hash),
+                                     is_path_response, self.PN_WINDOW_S)
+        self.core._on_propagation_announce(destination_hash, app_data, announced_identity, fresh=fresh)

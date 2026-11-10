@@ -35,6 +35,17 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - **Network tab:** "Stump over Wi-Fi" removed; the **radio channel** is now
   part of the LoRa radio box (saved, then confirmed by the RNode, in place),
   with **Announcing** right under it.
+- **Offline Stumps no longer show online.** Any Reticulum relay (every Stump
+  is one) answers a path request with the last announce it passed on, days
+  later; FireFly counted that as hearing the Stump, so a Stump that was off
+  looked online for 10 minutes (its announce) or 35 (its beacon), and every
+  pull-to-refresh asked for those answers. Now an announce counts only if it
+  came from its sender now: heard live, or a path response that's newer than
+  the last one from that Stump and (when its clock is real) made within the
+  window. A copy already seen, or an older one, doesn't count. A Heltec Stump
+  with no internet (its clock counts from 2000) still counts after a restart.
+  A replayed beacon's old boot id isn't taken for a restart, and propagation
+  nodes get the same check. Test: run_fresh_announce.
 - **Settings › Profile:** "Your name" and "Identity" together: your name,
   your identity (Share, Back up, Restore), any warning about you on the
   network, and **Announce now** (from the Network tab).

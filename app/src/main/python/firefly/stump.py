@@ -29,21 +29,75 @@ def clean_nick(name, maxlen=16):
     return out[:maxlen] or "guest"
 
 
+# ---------------------------------------------------------------- fresh or replayed
+REAL_CLOCK_SINCE = 1704067200      # 2024-01-01: an announce made later says its sender knows the time
+
+
+def announce_blob(dest_hash, packet_hash=None):
+    """The random blob of the announce Reticulum just took for dest_hash: 5 random bytes, then
+    the second its sender made it. None when it can't be told which announce it was."""
+    try:
+        entry = RNS.Transport.path_table.get(dest_hash)
+        if not entry:
+            return None
+        if packet_hash is not None and len(entry) > 6 and entry[6] != packet_hash:
+            return None
+        blobs = entry[4]
+        return bytes(blobs[-1]) if blobs else None
+    except Exception:
+        return None
+
+
+def fresh_announce(memory, dest_hash, blob, is_path_response, window_s, now=None):
+    """Did this announce come from its sender just now, or is it a relay's remembered copy?
+    (Nov 2026: offline Stumps showed online. Any Reticulum relay answers a path request with the
+    last announce it passed on, for days; FireFly took that for hearing the Stump.)
+      - one already seen: a copy, not fresh;
+      - heard live (not a path response): fresh (a relay passes a live announce on once, as it
+        comes in), even if its sender's clock went back (a Heltec Stump restarted);
+      - a path response: fresh only if it's newer than the last one from that sender, and,
+        when the sender knows the time, made within the window.
+    The sender's times are compared with each other, and with the phone's clock only when they
+    look real (a Heltec Stump with no internet counts from 2000). memory: {hex: state}."""
+    if blob is None:
+        return not is_path_response          # can't tell: trust only what's heard live
+    m = memory.setdefault(dest_hash.hex(), {"emit": None, "blobs": []})
+    if blob in m["blobs"]:
+        return False
+    m["blobs"] = (m["blobs"] + [blob])[-32:]
+    emit = int.from_bytes(blob[5:10], "big")
+    before = m["emit"]
+    m["emit"] = emit if before is None else max(before, emit)
+    if not is_path_response:
+        return True
+    if before is not None and emit <= before:
+        return False
+    if emit >= REAL_CLOCK_SINCE and (now or time.time()) - emit > window_s:
+        return False
+    return True
+
+
 # ---------------------------------------------------------------- beacons
 class BeaconHandler:
     """Registers with RNS.Transport; calls on_stump(lxmf_hash_hex, name, version)."""
     aspect_filter = f"{BEACON_APP}.{BEACON_ASPECT}"
     receive_path_responses = True
 
+    BEACON_WINDOW_S = 35 * 60          # a Stump beacons every 30 min
+
     def __init__(self, on_stump):
         self.on_stump = on_stump
+        self.seen = {}
 
-    def received_announce(self, destination_hash, announced_identity, app_data):
+    def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None,
+                          is_path_response=False):
         info = parse_beacon(app_data)
         if info and not beacon_is_own(info[0], announced_identity):
             return              # a beacon naming someone else's LXMF address: forged (Stump 1.0.0-beta.37)
         if info:
-            self.on_stump(*info, beacon_http(app_data), boot=beacon_boot(app_data))
+            fresh = fresh_announce(self.seen, destination_hash, announce_blob(destination_hash, announce_packet_hash),
+                                   is_path_response, self.BEACON_WINDOW_S)
+            self.on_stump(*info, beacon_http(app_data), boot=beacon_boot(app_data), fresh=fresh)
 
 
 # Rooms renamed in Stump 1.0.0-beta.4: #lxmf is #lora-mesh (LoRa phones and handhelds
