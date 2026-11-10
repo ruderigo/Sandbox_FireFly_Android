@@ -46,6 +46,12 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
   with no internet (its clock counts from 2000) still counts after a restart.
   A replayed beacon's old boot id isn't taken for a restart, and propagation
   nodes get the same check. Test: run_fresh_announce.
+  Two more ways it happened, fixed too: opening a Stump (or verifying) stamped
+  it "seen now", and "seen" times saved by earlier versions still counted.
+  Now, over LoRa, online means heard live by FireFly *since it started*,
+  recently (its own announce, 10 min; its beacon, 35 min); over Wi-Fi, it
+  means it answered since FireFly started. Right after FireFly starts, a
+  LoRa Stump shows online at its next announce (every 2 min).
 - **Settings › Profile:** "Your name" and "Identity" together: your name,
   your identity (Share, Back up, Restore), any warning about you on the
   network, and **Announce now** (from the Network tab).

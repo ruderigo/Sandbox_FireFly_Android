@@ -79,6 +79,11 @@ class Core:
         self.sessions = {}          # session key -> StumpSession
         self.moved = {}             # an old Wi-Fi key -> the key of the same Stump at its new address
         self.beacon_http = {}       # lxmf hex -> the web addresses its beacon gave (Stump 1.0.0-beta.21+)
+        # Over LoRa, "online" is only what this run heard from the Stump itself, recently: its
+        # announce or beacon, passed by fresh_announce (Nov 9: offline Stumps showed online, from
+        # relays' remembered announces, opening a Stump, and times saved before the fix).
+        self.announce_heard = {}    # lxmf hex -> when its own announce came in (this run)
+        self.beacon_heard = {}      # lxmf hex -> when its own beacon came in (this run)
         self.boots = {}             # lxmf hex -> its beacon's boot id, caps["b"] (Stump 1.0.0-beta.43+)
         self.restarted_at = {}      # lxmf hex -> when its boot id last changed (it restarted)
         self._relocate_lock = threading.Lock()
@@ -141,6 +146,8 @@ class Core:
         self._attach_optional_interfaces()
         for node in self.store.stump_nodes():
             if node["transport"] == "wifi":
+                # Online only once it answers this run (not from the last run's mark).
+                self.store.upsert_stump_node(node["key"], "wifi", node["address"], online=0)
                 self.open_stump_wifi(node["address"])
         threading.Thread(target=self._housekeeping, daemon=True, name="firefly-housekeeping").start()
         threading.Thread(target=self._watch_store, daemon=True, name="firefly-watch").start()
@@ -303,6 +310,8 @@ class Core:
             # Asking is faster than waiting up to 30 minutes for the next beacon.
             self._beacon_asked.add(h)
             RNS.Transport.request_path(stump.beacon_hash_for(identity))
+        if fresh:
+            self.announce_heard[h] = time.time()
         if h in self.stumps and fresh:
             self.store.upsert_stump_node(mesh_key(h), "mesh", h, last_seen=time.time())
 
@@ -326,6 +335,7 @@ class Core:
             threading.Thread(target=self._ask_stump_pn, args=(lxmf_hex,), daemon=True).start()
         self.store.upsert_peer(lxmf_hex, "lxmf", heard=False, stump=name, stump_ver=version)
         if fresh:
+            self.beacon_heard[lxmf_hex] = time.time()
             self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name, last_seen=time.time())
         else:
             self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name)
@@ -1035,8 +1045,8 @@ class Core:
         lora = False
         if mesh:
             now = time.time()
-            announced = (self.store.peer(mesh["address"]) or {}).get("last_heard") or 0
-            beaconed = mesh.get("last_seen") or 0
+            announced = self.announce_heard.get(mesh["address"], 0)       # heard by this run, itself
+            beaconed = self.beacon_heard.get(mesh["address"], 0)
             recent = now - announced < self.MESH_ALIVE_S or now - beaconed < self.BEACON_ALIVE_S
             lora = bool(recent and self.can_reach(mesh["address"]))
         if web:

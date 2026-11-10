@@ -477,8 +477,10 @@ class StumpSession:
         self.folded = set()                 # "renamed" pairs already applied
         self.offline_reason = None          # why the last Wi-Fi poll got nothing ("connection refused"…)
         self.hw = None                      # the node's radio state from the poll (Stump 1.0.0-beta.5+)
+        # Opening a session isn't hearing the Stump (Nov 9): over LoRa, "seen" comes from its own
+        # announces and beacons only; over Wi-Fi, from its answers (set_online).
         self._save(name=name or node.get("name") or pipe.address, room=self.room, active=1,
-                   last_seen=time.time())
+                   **({"last_seen": time.time()} if pipe.kind == WIFI and not node else {}))
         pipe.start(self)
         if pipe.kind == WIFI:
             self.greet()                    # say who we are first (Stump 1.0.0-beta.31; harmless before)

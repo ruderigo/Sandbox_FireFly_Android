@@ -49,6 +49,7 @@ check("...phone off Wi-Fi, no LoRa side: no_wifi (not 'N/A over LoRa')", reach(W
 
 # The same Stump on LoRa too.
 c.store.upsert_stump_node("mesh:" + LX, "mesh", LX, name="LaBuche", last_seen=time.time())
+c.beacon_heard[LX] = time.time()                 # its own beacon, heard by this run just now
 c.can_reach = lambda h: True                     # a radio online
 check("...with a LoRa side heard just now, phone off Wi-Fi: lora", reach(W, False)["state"] == "lora")
 check("...asked from the LoRa side, phone on Wi-Fi: wifi, from its Wi-Fi side",
@@ -57,7 +58,8 @@ check("...asked from the LoRa side, phone on Wi-Fi: wifi, from its Wi-Fi side",
 # The Stump goes down: its Wi-Fi stops answering, and LoRa hasn't been heard for long.
 srv.shutdown(); srv.server_close()
 c.store.upsert_stump_node("mesh:" + LX, "mesh", LX, last_seen=time.time() - 3600)
-c.store.upsert_peer(LX, "lxmf", heard=False)
+c.beacon_heard[LX] = time.time() - 3600          # last heard an hour ago
+c.announce_heard.pop(LX, None)
 check("Stump down (probed): offline, not 'N/A over LoRa'", reach("mesh:" + LX, True, True)["state"] == "offline",
       reach("mesh:" + LX, True, True))
 check("...and its Wi-Fi side is marked offline by the probe",
@@ -66,7 +68,7 @@ check("...the Stumps tab says not alive",
       not next(r for r in json.loads(api.stump_nodes(True)) if r["group"] == LX)["alive"])
 
 # LoRa heard again (an announce), Wi-Fi still down: lora.
-c.store.upsert_peer(LX, "lxmf")
+c._on_delivery_announce(bytes.fromhex(LX), None, None, fresh=True)   # its own announce, live
 check("announce heard again, Wi-Fi still down: lora", reach("mesh:" + LX, True, True)["state"] == "lora")
 check("...alive on the Stumps tab", next(r for r in json.loads(api.stump_nodes(True)) if r["group"] == LX)["alive"])
 c.can_reach = lambda h: False                    # the radio unplugged

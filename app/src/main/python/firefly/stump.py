@@ -72,9 +72,12 @@ def fresh_announce(memory, dest_hash, blob, is_path_response, window_s, now=None
         return True
     if before is not None and emit <= before:
         return False
-    if emit >= REAL_CLOCK_SINCE and (now or time.time()) - emit > window_s:
-        return False
-    return True
+    if emit >= REAL_CLOCK_SINCE:
+        return (now or time.time()) - emit <= window_s
+    # A clock that isn't real (a Heltec with no internet counts from 2000): newer than one seen
+    # before is fresh; the first one this run, by path request, can't be told from a relay's
+    # copy: not counted (its next live announce, every 2 min, is).
+    return before is not None
 
 
 # ---------------------------------------------------------------- beacons

@@ -39,8 +39,10 @@ check("first time, by path request, made 3 days ago: not fresh", not stump.fresh
 check("first time, by path request, made a minute ago: fresh", stump.fresh_announce(mem2, d2, blob(now - 60), True, 600, now))
 mem3, d3 = {}, os.urandom(16)
 heltec = 946684800 + 3600                    # an ESP32 with no internet: 2000-01-01 + an hour of uptime
-check("a Heltec's clock (near 2000), first time by path request: can't tell its age, fresh",
-      stump.fresh_announce(mem3, d3, blob(heltec), True, 600, now))
+check("a Heltec's clock (near 2000), first time by path request: its age can't be told, not counted",
+      not stump.fresh_announce(mem3, d3, blob(heltec), True, 600, now))
+check("...heard live: fresh", stump.fresh_announce(mem3, d3, blob(heltec + 120), False, 600, now))
+check("...a newer one by path request (the Stump answering itself): fresh", stump.fresh_announce(mem3, d3, blob(heltec + 200), True, 600, now))
 check("...its same announce again: not fresh", not stump.fresh_announce(mem3, d3, mem3[d3.hex()]["blobs"][-1], True, 600, now))
 check("...restarted, clock back to 2000 + 10 s, heard live: fresh", stump.fresh_announce(mem3, d3, blob(946684810), False, 600, now))
 check("...an older copy by path request after that: not fresh", not stump.fresh_announce(mem3, d3, blob(heltec - 60), True, 600, now))
@@ -77,6 +79,18 @@ arrive(handler, dest, old, True)
 check("...and again: still offline", reach() == "offline", reach())
 arrive(handler, dest, blob(time.time()), False)
 check("the Stump announces itself (live): online", reach() == "lora", reach())
+
+# Opening a Stump, or "seen" times saved before (older versions), aren't hearing it.
+ident9 = RNS.Identity(); LX9 = RNS.Destination.hash(ident9, "lxmf", "delivery").hex()
+c.stumps[LX9] = ("Racine", "1.0.0-beta.57")
+c.store.upsert_stump_node("mesh:" + LX9, "mesh", LX9, name="Racine", last_seen=time.time())
+c.store.upsert_peer(LX9, "lxmf")                 # last_heard: now, as an older FireFly saved it
+r9 = lambda: c.stump_reach("mesh:" + LX9)["state"]
+check("'seen' times saved by an older FireFly: not online (this run never heard it)", r9() == "offline", r9())
+api.stump_view("mesh:" + LX9)                    # opening it
+check("opening a Stump: still offline", r9() == "offline", r9())
+json.loads(api.stump_verify("mesh:" + LX9, True))
+check("...verifying (entering it): still offline", r9() == "offline", r9())
 
 # Beacons: a replayed one doesn't make it online, and its old boot id isn't a restart.
 ident2 = RNS.Identity()
