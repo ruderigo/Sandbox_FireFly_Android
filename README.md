@@ -8,13 +8,13 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.57** (sandbox, for Stump 1.0.0-beta.57; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.1-beta.66** (sandbox, for Stump 1.0.0-beta.66; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
-### Next build (in progress): the "+ 🪵" button
+### 0.6.1-beta.66: the "+ 🪵" button, a Stump's DM replies in its thread (Stump 1.0.0-beta.66)
 - The Stumps list's **Find Stumps** button is now a round **+ 🪵** button at
   the bottom right, where the thumb is. Tapped, it opens three, icons only:
   - **search** (radar): the popup that looks on this Wi-Fi, checkboxes,
@@ -35,6 +35,22 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - **Network tab:** "Stump over Wi-Fi" removed; the **radio channel** is now
   part of the LoRa radio box (saved, then confirmed by the RNode, in place),
   with **Announcing** right under it.
+- **A DM to a Stump comes back in the same thread** (Stump 1.0.0-beta.64's fix,
+  on FireFly's side): a Stump answers under its name as typed
+  ("LaBuche-Stump-eK0ms") while FireFly knew it by its nick ("LaBuche-Stump-eK",
+  16 characters at most), so its answer opened a new thread, as someone else.
+  Now any form of the Stump's own name (as typed, its nick, a name that cleans
+  to it, with a tag or a number) is that Stump, in the thread already open
+  with it; a person's nick that starts the same is still themselves.
+- **/names marks ops and mods** (Stump 1.0.0-beta.64): "@alice", "%bob". The
+  people list FireFly keeps for DMs takes the bare nicks; the /names line
+  shown keeps the marks.
+- **"No LoRa on mesh"** (Stump 1.0.0-beta.58): with no radio on the Stump nor
+  its chain, joining #lora-mesh is refused with "⊘ #lora-mesh no-lora — …" and
+  FireFly stays in #main, showing why. Checked on a real beta.66 Stump. (Also
+  beta.58's #lora-mesh fix on the Stump side.)
+- Build 66, for Stump 1.0.0-beta.66; checked against a real beta.66 Stump.
+  Test: run_stump_dm_thread.
 - **Offline Stumps no longer show online.** Any Reticulum relay (every Stump
   is one) answers a path request with the last announce it passed on, days
   later; FireFly counted that as hearing the Stump, so a Stump that was off

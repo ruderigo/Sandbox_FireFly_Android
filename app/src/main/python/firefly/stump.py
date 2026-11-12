@@ -29,6 +29,52 @@ def clean_nick(name, maxlen=16):
     return out[:maxlen] or "guest"
 
 
+# ---------------------------------------------------------------- a Stump's own name, any form
+# A Stump answers DMs under its name as typed ("LaBuche-Stump-eK0ms"); in its rooms and to
+# FireFly it's known by its nick (cleaned, 16 characters at most, maybe tagged:
+# "LaBuche-Stump-eK"). Stump 1.0.0-beta.64 counts any form as the Stump itself; so does FireFly,
+# or its answer opened a new thread, as someone else (Nov 12). Same rules as the Stump's rrc.py.
+STUMP_NICK_LEN = 16
+_STUMP_NICK_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_[]{}\\^`|")
+_TAG_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789")
+
+
+def bare_nick(n):
+    """A nick from /names without its mark: ~ (verified), @ (op) and % (mod) since Stump
+    1.0.0-beta.64 (rrcd's), + and & as IRC has them."""
+    return (n or "").strip().lstrip("~@%+&")
+
+
+def stump_nick(name):
+    """The nick a Stump makes of a name (rrc.clean_nick): other characters to "-", 16 at most,
+    no "-" at the ends."""
+    return "".join(ch if ch in _STUMP_NICK_CHARS else "-" for ch in (name or ""))[:STUMP_NICK_LEN].strip("-")
+
+
+def _tagged_from(nick, base):
+    b = base[:STUMP_NICK_LEN - 5]
+    return nick == base or (nick.startswith(b + "-") and len(nick) == len(b) + 5
+                            and all(c in _TAG_CHARS for c in nick[len(b) + 1:]))
+
+
+def _made_from(nick, want):
+    """Is this nick made from that name: itself, with a tag, or with a number (before beta.60)?"""
+    base = want[:STUMP_NICK_LEN - 2]
+    return _tagged_from(nick, want) or (nick.startswith(base) and nick[len(base):].isdigit())
+
+
+def is_stump_itself(nick, name):
+    """Is "<nick>" the Stump named `name` (as typed) answering itself? Its name, its nick, or a
+    name that cleans to it. A person's nick is already clean, so it can't pass for the Stump."""
+    if not nick or not name:
+        return False
+    who = stump_nick(name)
+    if nick in (name, who):
+        return True
+    c = stump_nick(nick)
+    return bool(c) and c != nick and (c == who or _made_from(who, c))
+
+
 # ---------------------------------------------------------------- fresh or replayed
 REAL_CLOCK_SINCE = 1704067200      # 2024-01-01: an announce made later says its sender knows the time
 

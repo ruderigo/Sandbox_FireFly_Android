@@ -1134,7 +1134,7 @@ class StumpSession:
             return self._save(rooms=sorted(rooms.values(), key=lambda r: r["name"]))
         if k == "names":
             if p["room"] == self.room:
-                self._save(users=p["names"])
+                self._save(users=[stump.bare_nick(n) for n in p["names"]])   # "@alice" (op) is alice
             return self.store.add_line(self.key, self.room, "reply", f"#{p['room']}: " + ", ".join(p["names"]))
         if k == "rename":
             if p["old"].lstrip("~") == self.my_nick():
@@ -1312,8 +1312,20 @@ class StumpSession:
             return                          # a confirmation we already matched (duplicate)
         self._incoming_dm(author, text, audio=audio if text.startswith("♪") else None)
 
+    def _thread_for_stump(self, nick):
+        """A DM from the Stump itself, under any form of its name (Stump 1.0.0-beta.64): the
+        thread already open with it, or its nick. None for anyone else."""
+        name = (self.store.stump_node(self.key) or {}).get("name") or ""
+        if not stump.is_stump_itself(nick, name):
+            return None
+        for t in self.store.dm_threads(self.key):
+            if stump.is_stump_itself(t["nick"], name):
+                return t["nick"]
+        return stump.stump_nick(name) or nick
+
     def _incoming_dm(self, nick, text, ts=None, audio=None):
         nick = nick.lstrip("~")
+        nick = self._thread_for_stump(nick) or nick     # the Stump answering: in its thread, not a new person
         if self.core.stump_blocks(self.key, nick):
             return                          # blocked here: dropped, no notification
         self.store.add_dm(self.key, nick, False, text, "received", unread=True, ts=ts, audio=audio)
