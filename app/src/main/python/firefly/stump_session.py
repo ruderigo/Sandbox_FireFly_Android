@@ -469,6 +469,15 @@ class StumpSession:
         self.board_asked = {"list": None, "items": {}, "post": None}     # (arg, when) / {id: when}
         self.bots = set()                   # nicks whose lines are a bot's ("bot": true, beta.36): no DMs to them
         self.auth_quiet, self.auth_before = False, None
+        # Who's in the room, in full (Nov 13): a Wi-Fi poll's "users" are this Stump's people
+        # only; /names adds the ones on other Stumps (#lora-mesh, nick@stump). FireFly asks
+        # /names on entering a room (shown), again every minute over Wi-Fi (quietly), keeps the
+        # answer per room, and merges it with each poll's list instead of being overwritten.
+        self.names = {}                 # room -> [bare nicks] from its last /names
+        self.names_asked = None         # the room /names was last asked in, and when
+        self.names_asked_at = 0.0
+        self.names_quiet = set()        # rooms whose next /names answer isn't shown
+        self.local_users = []           # the last Wi-Fi poll's people (this Stump's only)
         # Entering a Stump waits for this (the "verifying…" popup): FireFly proves who it is to
         # every Stump, over Wi-Fi (/hello or /auth) and LoRa (/auth), before the room opens.
         # "idle", "verifying", "ok", "not_needed" (a Stump without /auth), "failed" (+ detail).
@@ -592,6 +601,36 @@ class StumpSession:
             self.store.move_recent_own_lines(self.key, old, room, time.time() - MOVE_WINDOW_S)
         if why:
             self.store.add_line(self.key, room, "system", why)
+        self._names_for_room()
+
+    NAMES_REFRESH_S = 60                # over Wi-Fi, who's in the room is asked again every minute
+
+    def _room_people(self, users):
+        """This Stump's people (a poll's "users", or what's saved) with the ones on other Stumps
+        from the room's last /names: everyone, without duplicates, here first."""
+        out, seen = [], set()
+        for n in list(users) + list(self.names.get((self.room or "").lstrip("#"), [])):
+            b = stump.bare_nick(n)
+            if b and b not in seen:
+                seen.add(b)
+                out.append(b)
+        return out
+
+    def _names_for_room(self):
+        """Entering a room: /names at once (its answer shown), so the list is full straight away,
+        people on other Stumps included. Over Wi-Fi, again every minute, quietly."""
+        room = (self.room or "").lstrip("#")
+        if not room or self.hello == "required":
+            return
+        now = time.time()
+        if self.names_asked != room:
+            self.names_asked, self.names_asked_at = room, now
+            self.names_quiet.discard(room)
+            self.pipe.send("/names")
+        elif self.pipe.kind == WIFI and now - self.names_asked_at >= self.NAMES_REFRESH_S:
+            self.names_asked_at = now
+            self.names_quiet.add(room)
+            self.pipe.send("/names")
 
     def command(self, line):
         self._note_join(line)
@@ -977,9 +1016,11 @@ class StumpSession:
         node = self.store.stump_node(self.key) or {}
         known = {r["name"]: r for r in node.get("rooms", [])}
         fields["rooms"] = [known.get(n, {"name": n}) for n in data.get("rooms") or []]
-        fields["users"] = data.get("users") or []
+        self.local_users = data.get("users") or []
+        fields["users"] = self._room_people(self.local_users)
         fields["stumps"] = data.get("stumps") or []
         self._save(**fields)
+        self._names_for_room()
         renamed = data.get("renamed")
         if isinstance(renamed, dict):
             self._fold_renamed(renamed)
@@ -1133,8 +1174,13 @@ class StumpSession:
             rooms[p["room"]] = {"name": p["room"], "count": p["count"], "tier": p["tier"], "topic": p["topic"]}
             return self._save(rooms=sorted(rooms.values(), key=lambda r: r["name"]))
         if k == "names":
-            if p["room"] == self.room:
-                self._save(users=[stump.bare_nick(n) for n in p["names"]])   # "@alice" (op) is alice
+            room = p["room"].lstrip("#")
+            self.names[room] = [stump.bare_nick(n) for n in p["names"]]     # "@alice" (op) is alice
+            if stump.same_room(room, self.room or ""):
+                self._save(users=self._room_people(self.local_users))
+            if room in self.names_quiet:                 # our own refresh: the list, not a line
+                self.names_quiet.discard(room)
+                return None
             return self.store.add_line(self.key, self.room, "reply", f"#{p['room']}: " + ", ".join(p["names"]))
         if k == "rename":
             if p["old"].lstrip("~") == self.my_nick():

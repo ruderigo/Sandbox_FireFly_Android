@@ -8,11 +8,23 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.66** (sandbox, for Stump 1.0.0-beta.66; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.1-beta.69** (sandbox, for Stump 1.0.0-beta.69; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.1-beta.69: everyone in the room at once (Stump 1.0.0-beta.69)
+- **The full list of names as soon as you enter a room.** In #lora-mesh,
+  people on other Stumps (nick@stump) are only in /names: a Wi-Fi poll lists
+  this Stump's people, and each poll replaced the list, so FireFly showed
+  fewer people than a laptop on the same Stump until someone typed /names.
+  Now FireFly sends /names by itself on entering any room (the answer is
+  shown), keeps it per room and merges it with each poll's list. Over Wi-Fi it
+  asks again every minute, quietly; over LoRa only on entry, to save airtime.
+- Build 69, for Stump 1.0.0-beta.69 (beta.67: default language, beta.68:
+  #lora-mesh membership on the Stump side, beta.69: moderation fixes; nothing
+  else to change in FireFly). Test: run_room_names.
 
 ### 0.6.1-beta.66: the "+ 🪵" button, a Stump's DM replies in its thread (Stump 1.0.0-beta.66)
 - The Stumps list's **Find Stumps** button is now a round **+ 🪵** button at
