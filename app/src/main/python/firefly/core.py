@@ -348,7 +348,8 @@ class Core:
             sess = self.sessions.get(key)
             if sess is not None:
                 sess.peer_restarted()
-            elif (self.store.stump_node(key) or {}).get("auth") == "ok":
+            elif (self.store.stump_node(key) or {}).get("auth") == "ok" and not key.startswith("mesh:"):
+                # (Over LoRa our signed messages still prove who we are: it stays verified.)
                 self.store.upsert_stump_node(key, key.partition(":")[0], key.partition(":")[2], auth="none")
 
     # ---------------------------------------------------------------- an address scanned or typed

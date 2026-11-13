@@ -22,6 +22,12 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
   Now FireFly sends /names by itself on entering any room (the answer is
   shown), keeps it per room and merges it with each poll's list. Over Wi-Fi it
   asks again every minute, quietly; over LoRa only on entry, to save airtime.
+- **No verifying again when already verified.** Over LoRa, a Stump FireFly
+  verified with once stays verified, across restarts of FireFly and of the
+  Stump: a Stump takes each of FireFly's LXMF messages as proof (they're
+  signed), so the /auth round trips over the air are skipped and the room
+  opens at once. Over Wi-Fi, when the Stump's poll says it already knows
+  FireFly ("hello": "done"), no /hello again.
 - Build 69, for Stump 1.0.0-beta.69 (beta.67: default language, beta.68:
   #lora-mesh membership on the Stump side, beta.69: moderation fixes; nothing
   else to change in FireFly). Test: run_room_names.

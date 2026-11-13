@@ -806,16 +806,33 @@ class StumpSession:
             return dict(self.verify)
         if st == "failed" and not again:     # entering (or Try again) asks anew; a poll only reads
             return dict(self.verify)
+        if not again and self._already_verified():
+            # Already verified (Nov 13): straight in, no /auth or /hello again.
+            self._verify_set("ok")
+            return dict(self.verify)
         if self.auth and self.auth.busy:
             self.auth = None                    # a stale one: start over with a fresh challenge
         self._verify_set("verifying")
         self.greet(force=True)
         return dict(self.verify)
 
+    def _already_verified(self):
+        """Does this Stump already know it's us? Over Wi-Fi, its own word this session (the
+        poll's "hello": "done"). Over LoRa, a verification it accepted before: a Stump takes
+        each of our LXMF messages as proof anyway (they're signed: stumpid counts a FireFly
+        over LoRa as verified), so it holds across its restarts and ours."""
+        if self.pipe.kind == WIFI:
+            return self.hello == "done"
+        node = self.store.stump_node(self.key) or {}
+        mine = self.core.identity.hash.hex()
+        return node.get("auth") == "ok" and (node.get("auth_detail") or mine) == mine   # this identity
+
     def peer_restarted(self):
         """The Stump restarted (a new boot id in its beacon): it no longer knows we proved who we
         are. Not "verified" any more; and if we had verified this run (the Stump is in use),
         verify again now, quietly."""
+        if self.pipe.kind != WIFI and self._already_verified():
+            return                              # over LoRa our signed messages still prove it
         was = self.verify["state"]
         self.auth = None
         self._save(auth="none", auth_detail="")
@@ -832,6 +849,8 @@ class StumpSession:
     def _hello_done(self):
         self.hello = "done"
         self.hello_ok.set()
+        if self.verify["state"] in ("idle", "verifying") and not (self.auth and self.auth.busy):
+            self._verify_set("ok")              # the Stump says it knows us: nothing to prove
 
     def wait_hello(self, secs=HELLO_WAIT_S):
         """For a line about to go out: True once the Stump has our greeting (or never asked)."""
