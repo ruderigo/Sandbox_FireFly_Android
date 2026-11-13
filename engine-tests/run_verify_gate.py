@@ -10,12 +10,10 @@ signature. stump_verify(key) starts it if need be and says where it is:
   * a refusal, no answer, no radio or an unreachable Wi-Fi Stump: failed, with
     the reason, and Try again starts over;
   * a Stump without /auth: nothing to prove, the room opens;
-  * a Stump that restarts (a new boot id in its beacon, Stump 1.0.0-beta.43):
-    over Wi-Fi verified again by itself; over LoRa it stays verified (Nov 13);
-    unknown caps keys are ignored;
-  * already verified (Nov 13): no /auth or /hello again, over LoRa across
-    restarts of FireFly and of the Stump (a Stump takes our signed LXMF
-    messages as proof), over Wi-Fi when the poll says "hello": "done".
+  * a Stump that restarts (a new boot id in its beacon, Stump 1.0.0-beta.43)
+    is verified again by itself; unknown caps keys are ignored.
+  (Not verifying again when already verified, and no /auth over LoRa from Stump
+  beta.71: run_lora_auth.)
 """
 import json, os, sys, tempfile, time
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -84,26 +82,8 @@ check("...quietly: no AUTH-OK line in the room",
 gate(K)
 check("...entering again doesn't ask again", len(sent) == 2, sent)
 
-# Already verified: FireFly restarted (a new session) -> straight in, nothing sent
-c.sessions.pop(K).stop()
-sess = c.session(K); sess.pipe.send = lambda line, control=False: sent.append(line)
-n = len(sent)
-check("already verified over LoRa, FireFly restarted: straight in, no /auth", gate(K)["state"] == "ok" and len(sent) == n, sent[n:])
-c.identity_save = c.identity
-class Other:                                   # another identity than the one verified
-    class hash: hex = staticmethod(lambda: "11" * 16)
-c.identity = Other
-sess.verify = {"state": "idle", "detail": "", "at": 0}
-check("...verified under another identity: asks again", gate(K)["state"] == "verifying" and sent[-1] == "/auth", sent[-2:])
-c.identity = c.identity_save
-sess.auth = None
-
-def not_verified():                            # a Stump this identity hasn't proven itself to
-    sess.verify = {"state": "idle", "detail": "", "at": 0}
-    c.store.upsert_stump_node(K, "mesh", LX, auth="none")
-
 # a refusal, then Try again
-not_verified()
+sess.verify = {"state": "idle", "detail": "", "at": 0}
 sent.clear()
 gate(K)
 sess.on_mesh_content("AUTH-CHALLENGE " + "6a" * 16)
@@ -145,7 +125,7 @@ check("...caps that aren't a dict, or a b that isn't a string: None",
       and stump.beacon_boot(beacon(12345)) is None)
 
 sent.clear()
-not_verified()
+sess.verify = {"state": "idle", "detail": "", "at": 0}
 gate(K)
 sess.on_mesh_content("AUTH-CHALLENGE " + "7b" * 16)
 sess.on_mesh_content("AUTH-OK " + c.identity.hash.hex())
@@ -155,11 +135,16 @@ c._on_stump_beacon(LX, "LaBuche", "1.0.0-beta.43", ["http://10.0.0.5"], boot="a1
 c._on_stump_beacon(LX, "LaBuche", "1.0.0-beta.43", ["http://10.0.0.5"], boot="a1b2c3")
 check("the same boot id again: nothing happens", sent == [] and gate(K)["state"] == "ok", (sent, gate(K)))
 c._on_stump_beacon(LX, "LaBuche", "1.0.0-beta.43", ["http://10.0.0.5"], boot="d4e5f6")
-check("a new boot id over LoRa: still verified, nothing sent (our messages are signed)",
-      sent == [] and gate(K)["state"] == "ok" and json.loads(api.stump_view(K))["auth"] == "ok", (sent, sess.verify))
+check("a new boot id: it restarted, FireFly verifies again by itself",
+      sent == ["/auth"] and sess.verify["state"] == "verifying", (sent, sess.verify))
+check("...not shown 'verified' meanwhile", json.loads(api.stump_view(K))["auth"] != "ok")
 check("...and the view says when it restarted", json.loads(api.stump_view(K))["restarted_at"])
+sess.on_mesh_content("AUTH-CHALLENGE " + "8c" * 16)
+sess.on_mesh_content("AUTH-OK " + c.identity.hash.hex())
+check("...verified again, quietly", gate(K)["state"] == "ok"
+      and not any(l["body"].startswith("AUTH-") for l in json.loads(api.stump_view(K))["lines"]))
 c._on_stump_beacon(LX, "LaBuche", "1.0.0-beta.42", ["http://10.0.0.5"], boot=None)
-check("a beacon without a boot id (downgrade, older relay) changes nothing", gate(K)["state"] == "ok" and sent == [], sent)
+check("a beacon without a boot id (downgrade, older relay) changes nothing", gate(K)["state"] == "ok" and len(sent) == 2, sent)
 
 # A Stump restarting that FireFly hasn't entered this run: only "verified" goes, no airtime.
 LX3 = "cf" * 16
@@ -167,8 +152,8 @@ K3 = "mesh:" + LX3
 c.store.upsert_stump_node(K3, "mesh", LX3, name="Racine", last_seen=time.time(), auth="ok")
 c._on_stump_beacon(LX3, "Racine", "1.0.0-beta.43", [], boot="111111")
 c._on_stump_beacon(LX3, "Racine", "1.0.0-beta.43", [], boot="222222")
-check("a Stump not entered restarts over LoRa: still verified, nothing sent",
-      c.store.stump_node(K3)["auth"] == "ok" and K3 not in c.sessions, c.store.stump_node(K3).get("auth"))
+check("a Stump not entered restarts: no longer 'verified', and nothing sent",
+      c.store.stump_node(K3)["auth"] == "none" and K3 not in c.sessions, c.store.stump_node(K3).get("auth"))
 
 # no radio
 LX2 = "ce" * 16

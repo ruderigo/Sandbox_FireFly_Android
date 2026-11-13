@@ -162,6 +162,22 @@ def canonical_room(room):
     return ROOM_ALIASES.get(room, room)
 
 
+def release_beta(release):
+    """1.0.0-beta.71 -> 71; a release without "-beta" (1.0.0) -> a number above every beta;
+    unknown or unreadable -> None."""
+    m = re.fullmatch(r"\s*(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?\s*", str(release or ""))
+    if not m:
+        return None
+    if m.group(4) is not None:
+        return int(m.group(4)) if m.group(1) == "1" and m.group(2) == "0" and m.group(3) == "0" else 10 ** 6
+    return 10 ** 6
+
+
+# From Stump 1.0.0-beta.71 a LoRa sender whose LXMF signature checks out counts as verified
+# for everything (room tiers, /invite, /whoami): FireFly sends no /auth over LoRa at all.
+LORA_SIGNED_FROM_BETA = 71
+
+
 def same_room(a, b):
     return canonical_room(a) == canonical_room(b)
 

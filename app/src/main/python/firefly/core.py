@@ -86,6 +86,7 @@ class Core:
         self.beacon_heard = {}      # lxmf hex -> when its own beacon came in (this run)
         self.boots = {}             # lxmf hex -> its beacon's boot id, caps["b"] (Stump 1.0.0-beta.43+)
         self.restarted_at = {}      # lxmf hex -> when its boot id last changed (it restarted)
+        self.met_this_run = set()   # Stumps whose own beacon we've heard since starting
         self._relocate_lock = threading.Lock()
         self._relocate_tried = {}   # key -> when we last asked where it went
         self.extra_ifaces = []      # AutoInterface / TCP interfaces we attached
@@ -337,8 +338,26 @@ class Core:
         if fresh:
             self.beacon_heard[lxmf_hex] = time.time()
             self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name, last_seen=time.time())
+            self._introduce_to_stump(lxmf_hex)
         else:
             self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name)
+
+    def _introduce_to_stump(self, lxmf_hex):
+        """The first time this run we hear a Stump itself: our announce, so it has our key before
+        our first message and takes it as signed at once (Nov 13, with the Stump team). At most
+        one announce per INTRODUCE_AFTER_S, however many Stumps are heard."""
+        if lxmf_hex in self.met_this_run:
+            return
+        self.met_this_run.add(lxmf_hex)
+        if time.time() - self.last_announce > INTRODUCE_AFTER_S:
+            self.last_announce = time.time()            # (claimed now: two beacons at once, one announce)
+            threading.Thread(target=self.announce, daemon=True, name="introduce").start()
+
+    def lora_signed(self, lxmf_hex):
+        """Does this Stump (1.0.0-beta.71+) take a LoRa sender's checked LXMF signature as full
+        proof (room tiers, /invite, /whoami)? Then FireFly sends it no /auth over LoRa."""
+        beta = stump.release_beta((self.stumps.get(lxmf_hex) or (None, None))[1])
+        return beta is not None and beta >= stump.LORA_SIGNED_FROM_BETA
 
     def stump_restarted(self, lxmf_hex):
         """A Stump beaconed a new boot id: it restarted. Over LoRa and Wi-Fi alike."""
@@ -348,8 +367,9 @@ class Core:
             sess = self.sessions.get(key)
             if sess is not None:
                 sess.peer_restarted()
-            elif (self.store.stump_node(key) or {}).get("auth") == "ok" and not key.startswith("mesh:"):
-                # (Over LoRa our signed messages still prove who we are: it stays verified.)
+            elif (self.store.stump_node(key) or {}).get("auth") == "ok" and not (
+                    key.startswith("mesh:") and self.lora_signed(lxmf_hex)):
+                # (Over LoRa, from Stump beta.71, our signed messages still prove who we are.)
                 self.store.upsert_stump_node(key, key.partition(":")[0], key.partition(":")[2], auth="none")
 
     # ---------------------------------------------------------------- an address scanned or typed

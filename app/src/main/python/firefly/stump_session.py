@@ -823,16 +823,27 @@ class StumpSession:
         over LoRa as verified), so it holds across its restarts and ours."""
         if self.pipe.kind == WIFI:
             return self.hello == "done"
+        if self._lora_signed():
+            return True
+        # Up to Stump 1.0.0-beta.70 room tiers and /invite go by the /auth itself, which the
+        # Stump forgets when it restarts: verified only under the boot id it accepted it in.
         node = self.store.stump_node(self.key) or {}
         mine = self.core.identity.hash.hex()
-        return node.get("auth") == "ok" and (node.get("auth_detail") or mine) == mine   # this identity
+        boot = self.core.boots.get(self.pipe.address)
+        return (node.get("auth") == "ok" and (node.get("auth_detail") or mine) == mine     # this identity
+                and boot is not None and node.get("auth_boot") == boot)                  # this boot
+
+    def _lora_signed(self):
+        """Over LoRa, from Stump 1.0.0-beta.71: our signed LXMF messages are all the proof it
+        needs (room tiers, /invite, /whoami included). No /auth, even the first time."""
+        return self.pipe.kind != WIFI and self.core.lora_signed(self.pipe.address)
 
     def peer_restarted(self):
         """The Stump restarted (a new boot id in its beacon): it no longer knows we proved who we
         are. Not "verified" any more; and if we had verified this run (the Stump is in use),
         verify again now, quietly."""
-        if self.pipe.kind != WIFI and self._already_verified():
-            return                              # over LoRa our signed messages still prove it
+        if self._lora_signed():
+            return                              # beta.71+ over LoRa: our signed messages still prove it
         was = self.verify["state"]
         self.auth = None
         self._save(auth="none", auth_detail="")
@@ -1406,7 +1417,8 @@ class StumpSession:
         if reply:
             self.pipe.send(reply, control=True)
         if sess.state == stump.AuthSession.OK:
-            self._save(auth="ok", auth_detail=sess.identity_hash or "")
+            self._save(auth="ok", auth_detail=sess.identity_hash or "",
+                       **({"auth_boot": self.core.boots.get(self.pipe.address)} if self.pipe.kind == MESH else {}))
             self._verify_set("ok")
             if self.hello == "required":
                 self._greeting_nick()           # the second half of the greeting
