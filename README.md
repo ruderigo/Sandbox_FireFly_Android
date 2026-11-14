@@ -8,11 +8,18 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.72** (sandbox, for Stump 1.0.0-beta.72; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.1-beta.73** (sandbox, for Stump 1.0.0-beta.73; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.1-beta.73 (Stump 1.0.0-beta.73)
+- Build 73, for Stump 1.0.0-beta.73: stumpid can no longer be left switched off
+  after a board reset (the kit's WROVERs answered "unknown command" to /auth
+  and /whoami); with it down, those now say identity checks are unavailable.
+  Nothing to change in FireFly; tested against it (run_real_lora_proof and the
+  other real-Stump tests).
 
 ### 0.6.1-beta.72: no /auth over LoRa (Stump 1.0.0-beta.72)
 - **Stump 1.0.0-beta.71+ over LoRa: no /auth at all**, the first visit too:
