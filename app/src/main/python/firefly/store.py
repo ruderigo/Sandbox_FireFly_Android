@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS stump_nodes (
     last_seen    REAL,
     active       INTEGER DEFAULT 1,
     lxmf         TEXT,                 -- the node's LXMF address (Wi-Fi: from the poll's node field)
-    auth_boot    TEXT                  -- the Stump's boot id when it accepted our /auth (LoRa)
+    auth_boot    TEXT,                 -- the Stump's boot id when it accepted our /auth (LoRa)
+    release      TEXT                  -- its full release from its beacon ("1.0.0-beta.72")
 );
 CREATE TABLE IF NOT EXISTS stump_lines (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,8 +131,9 @@ class Store:
                     self.db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
         if "lxmf" not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_nodes)")}:
             self.db.execute("ALTER TABLE stump_nodes ADD COLUMN lxmf TEXT")
-        if "auth_boot" not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_nodes)")}:
-            self.db.execute("ALTER TABLE stump_nodes ADD COLUMN auth_boot TEXT")
+        for col in ("auth_boot", "release"):
+            if col not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_nodes)")}:
+                self.db.execute(f"ALTER TABLE stump_nodes ADD COLUMN {col} TEXT")
         if "local_state" not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_lines)")}:
             self.db.execute("ALTER TABLE stump_lines ADD COLUMN local_state TEXT")
         self.db.commit()
@@ -281,7 +283,7 @@ class Store:
     # ---------------------------------------------------------------- stump nodes
     def upsert_stump_node(self, key, transport, address, **fields):
         allowed = {"name", "room", "nick", "topic", "rooms", "users", "stumps", "auth", "auth_detail",
-                   "online", "last_seen", "active", "lxmf", "auth_boot"}
+                   "online", "last_seen", "active", "lxmf", "auth_boot", "release"}
         with self.lock:
             if not self.db.execute("SELECT 1 FROM stump_nodes WHERE key=?", (key,)).fetchone():
                 self._write("INSERT INTO stump_nodes(key, transport, address, auth) VALUES (?,?,?,'none')",

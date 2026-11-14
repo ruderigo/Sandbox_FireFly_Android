@@ -92,6 +92,25 @@ check("...FireFly restarts: still in, nothing sent", gate(K2)["state"] == "ok" a
 s2.post("/auth")
 check("...typing /auth by hand still sends it", "/auth" in sent, sent)
 
+# a real beacon: the version item is "Beta A", the full release is in caps "r"
+import RNS.vendor.umsgpack as msgpack
+data = msgpack.packb(["stump", "Beta A", "Bois", bytes(16), [], {"r": "1.0.0-beta.72", "b": "z1"}])
+check("beacon_release reads caps r", stump.beacon_release(data) == "1.0.0-beta.72", stump.beacon_release(data))
+sent = []
+LX4 = "d4" * 16; K4 = "mesh:" + LX4
+c._on_stump_beacon(LX4, "Bois", "Beta A", [], boot="z1", release="1.0.0-beta.72")
+c.store.upsert_stump_node(K4, "mesh", LX4, name="Bois", last_seen=time.time())
+session(K4)
+check("'Beta A' with caps r 1.0.0-beta.72: no /auth", gate(K4)["state"] == "ok" and sent == [], sent)
+c.stumps[LX4] = ("Bois", "Beta A"); c.boots.pop(LX4, None)
+restart_firefly(K4)
+check("...FireFly restarts, beacon not heard yet: the kept release still counts", gate(K4)["state"] == "ok" and sent == [], sent)
+LX5 = "e5" * 16; K5 = "mesh:" + LX5
+c._on_stump_beacon(LX5, "Vieille", "Beta A", [], boot="v1", release="1.0.0-beta.70")
+c.store.upsert_stump_node(K5, "mesh", LX5, name="Vieille", last_seen=time.time())
+session(K5)
+check("'Beta A' with caps r 1.0.0-beta.70: /auth", gate(K5)["state"] == "verifying" and sent == ["/auth"], sent)
+
 # a beta.71 Stump not entered restarts: it stays verified (nothing to redo)
 LX3 = "c3" * 16; K3 = "mesh:" + LX3
 c.store.upsert_stump_node(K3, "mesh", LX3, name="Souche", last_seen=time.time(), auth="ok")

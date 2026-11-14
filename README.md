@@ -8,11 +8,22 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.69** (sandbox, for Stump 1.0.0-beta.69; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.1-beta.72** (sandbox, for Stump 1.0.0-beta.72; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.1-beta.72: no /auth over LoRa (Stump 1.0.0-beta.72)
+- **Stump 1.0.0-beta.71+ over LoRa: no /auth at all**, the first visit too:
+  the Stump takes FireFly's signed LXMF messages as the proof, for room tiers,
+  /invite and /whoami too. What a Stump can do goes by its full release from
+  its beacon (caps "r", kept), not the beacon's short version ("Beta A").
+  Checked with a real Stump: /whoami says "verified as" FireFly's identity
+  with no /auth sent (run_real_lora_proof; on beta.70, /auth as before).
+- Build 72, for Stump 1.0.0-beta.72 (beta.70: names lists over the radio in
+  parts; beta.71: LoRa signatures as the proof; beta.72: a LoRa Stump's first
+  lines kept until its beacon is in; nothing else to change in FireFly).
 
 ### 0.6.1-beta.69: everyone in the room at once (Stump 1.0.0-beta.69)
 - **The full list of names as soon as you enter a room.** In #lora-mesh,

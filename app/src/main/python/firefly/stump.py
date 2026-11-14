@@ -146,7 +146,8 @@ class BeaconHandler:
         if info:
             fresh = fresh_announce(self.seen, destination_hash, announce_blob(destination_hash, announce_packet_hash),
                                    is_path_response, self.BEACON_WINDOW_S)
-            self.on_stump(*info, beacon_http(app_data), boot=beacon_boot(app_data), fresh=fresh)
+            self.on_stump(*info, beacon_http(app_data), boot=beacon_boot(app_data), fresh=fresh,
+                          release=beacon_release(app_data))
 
 
 # Rooms renamed in Stump 1.0.0-beta.4: #lxmf is #lora-mesh (LoRa phones and handhelds
@@ -231,6 +232,13 @@ def beacon_boot(app_data):
     None on older Stumps (or anything that isn't a short string)."""
     b = beacon_caps(app_data).get("b")
     return b if isinstance(b, str) and 0 < len(b) <= 32 else None
+
+
+def beacon_release(app_data):
+    """caps["r"]: the Stump's full release ("1.0.0-beta.72"). The beacon's version item is its
+    short name ("Beta A"), so what it can do goes by this. None when absent."""
+    r = beacon_caps(app_data).get("r")
+    return r if isinstance(r, str) and 0 < len(r) <= 40 else None
 
 
 _ADDRESS_TEXT = re.compile(r"^(?:[a-z][a-z0-9+.-]*://)?<?([0-9a-f]{32})>?(?:[:/?#].*)?$")

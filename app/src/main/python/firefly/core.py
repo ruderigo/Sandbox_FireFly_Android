@@ -318,7 +318,7 @@ class Core:
 
     _beacon_asked = set()
 
-    def _on_stump_beacon(self, lxmf_hex, name, version, http=None, boot=None, fresh=True):
+    def _on_stump_beacon(self, lxmf_hex, name, version, http=None, boot=None, fresh=True, release=None):
         """fresh: the beacon came from the Stump now (a relay's remembered copy isn't hearing
         it: it doesn't make it online, and its old boot id isn't a restart)."""
         first = lxmf_hex not in self.stumps
@@ -335,12 +335,13 @@ class Core:
         if first:
             threading.Thread(target=self._ask_stump_pn, args=(lxmf_hex,), daemon=True).start()
         self.store.upsert_peer(lxmf_hex, "lxmf", heard=False, stump=name, stump_ver=version)
+        rel = {"release": release} if release else {}
         if fresh:
             self.beacon_heard[lxmf_hex] = time.time()
-            self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name, last_seen=time.time())
+            self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name, last_seen=time.time(), **rel)
             self._introduce_to_stump(lxmf_hex)
         else:
-            self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name)
+            self.store.upsert_stump_node(mesh_key(lxmf_hex), "mesh", lxmf_hex, name=name, **rel)
 
     def _introduce_to_stump(self, lxmf_hex):
         """The first time this run we hear a Stump itself: our announce, so it has our key before
@@ -356,7 +357,9 @@ class Core:
     def lora_signed(self, lxmf_hex):
         """Does this Stump (1.0.0-beta.71+) take a LoRa sender's checked LXMF signature as full
         proof (room tiers, /invite, /whoami)? Then FireFly sends it no /auth over LoRa."""
-        beta = stump.release_beta((self.stumps.get(lxmf_hex) or (None, None))[1])
+        # Its full release (beacon caps "r", kept), else the version item if it reads as one.
+        rel = (self.store.stump_node(mesh_key(lxmf_hex)) or {}).get("release")
+        beta = stump.release_beta(rel or (self.stumps.get(lxmf_hex) or (None, None))[1])
         return beta is not None and beta >= stump.LORA_SIGNED_FROM_BETA
 
     def stump_restarted(self, lxmf_hex):
